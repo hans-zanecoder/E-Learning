@@ -538,7 +538,7 @@ export default function StudentDashboard() {
   };
 
   const DashboardStats = () => {
-    // Get all lessons from enrolled courses
+    // Process lessons
     const allLessons = enrolledCourses.flatMap((course) =>
       (course.lessons || []).map((lesson) => ({
         ...lesson,
@@ -546,17 +546,23 @@ export default function StudentDashboard() {
       }))
     );
 
-    // Sort lessons by due date
-    const sortedLessons = allLessons.sort((a, b) => 
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    // Add counts for enrolled and finished courses
+    const enrolledCoursesCount = enrolledCourses.length;
+    const finishedCoursesCount = enrolledCourses.filter(
+      course => course.status === 'completed'
+    ).length;
+
+    // Process exams
+    const allExams = enrolledCourses.flatMap((course) =>
+      (course.exams || []).map((exam) => ({
+        ...exam,
+        courseName: course.title,
+      }))
     );
 
-    // Get upcoming lessons (not completed and due date not passed)
-    const upcomingLessons = sortedLessons.filter(
-      (lesson) => 
-        !lesson.completed && 
-        new Date(lesson.dueDate) > new Date()
-    );
+    const upcomingExams = allExams.filter(
+      (exam) => !exam.completed && new Date(exam.dueDate) > new Date()
+    ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
     return (
       <div className="space-y-6">
@@ -570,7 +576,7 @@ export default function StudentDashboard() {
                   Enrolled Courses
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {dashboardStats.enrolledCourses}
+                  {enrolledCoursesCount}
                 </h3>
               </div>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
@@ -609,11 +615,7 @@ export default function StudentDashboard() {
                   Finished Courses
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {
-                    enrolledCourses.filter(
-                      (course) => course.enrollment?.status === 'completed'
-                    ).length
-                  }
+                  {finishedCoursesCount}
                 </h3>
               </div>
               <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full">
@@ -623,58 +625,93 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* New Lessons Section */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Upcoming Lessons
-            </h2>
-            <button 
-              onClick={() => setCurrentView('lessons')}
-              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {upcomingLessons.slice(0, 3).map((lesson) => (
-              <div
-                key={lesson._id}
-                className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Next Exam Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Next Exam
+              </h3>
+              <button 
+                onClick={() => setCurrentView('exams')}
+                className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
               >
-                <div className="flex items-center justify-between">
+                View All
+              </button>
+            </div>
+
+            {upcomingExams.length > 0 ? (
+              <div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                      <BookOpenIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {lesson.title}
-                      </h3>
+                    <div className="flex-1">
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {upcomingExams[0].title}
+                      </h4>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {lesson.courseName}
+                        {upcomingExams[0].courseName} • {upcomingExams[0].duration} min
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                </div>
+                {upcomingExams.length > 1 && (
+                  <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                    and {upcomingExams.length - 1} other {upcomingExams.length - 1 === 1 ? 'exam' : 'exams'}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400">
+                No upcoming exams
+              </p>
+            )}
+          </div>
+
+          {/* Recent Lessons Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Recent Lessons
+              </h3>
+              <button 
+                onClick={() => setCurrentView('lessons')}
+                className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                View All
+              </button>
+            </div>
+
+            {allLessons.length > 0 ? (
+              <div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <BookmarkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(lesson.dueDate).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <div className="flex-1">
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {allLessons[0].title}
+                      </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {allLessons[0].courseName} • Due {new Date(allLessons[0].dueDate).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                 </div>
+                {allLessons.length > 1 && (
+                  <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                    and {allLessons.length - 1} other {allLessons.length - 1 === 1 ? 'lesson' : 'lessons'}
+                  </p>
+                )}
               </div>
-            ))}
-            {upcomingLessons.length === 0 && (
-              <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                No upcoming lessons
-              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400">
+                No lessons available
+              </p>
             )}
           </div>
         </div>
