@@ -9,6 +9,7 @@ import {
   BookOpenIcon,
   ArrowLeftOnRectangleIcon,
   UserCircleIcon,
+  ClipboardDocumentCheckIcon,
   AcademicCapIcon,
   UsersIcon,
   ClockIcon,
@@ -25,6 +26,7 @@ import { Enrollment } from '../types/enrollment';
 import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
+import AssignmentModal from '@/app/components/AssignmentModal';
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -46,6 +48,8 @@ export default function StudentDashboard() {
   const [isExamModalOpen, setIsExamModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<any>(null);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
 
   const navigation = [
     {
@@ -77,6 +81,11 @@ export default function StudentDashboard() {
       name: 'Available Courses',
       icon: PlusCircleIcon,
       view: 'available-courses',
+    },
+    {
+      name: 'Assignments',
+      icon: ClipboardDocumentCheckIcon,
+      view: 'assignments',
     },
     {
       name: 'Profile',
@@ -1104,6 +1113,151 @@ export default function StudentDashboard() {
     );
   };
 
+  const AssignmentsView = () => {
+    // Group assignments by course
+    const assignmentsByCourse = enrolledCourses.reduce((acc, course) => {
+      if (course.assignments && course.assignments.length > 0) {
+        acc[course._id] = {
+          courseName: course.title,
+          assignments: course.assignments.map(assignment => ({
+            ...assignment,
+            courseName: course.title,
+            courseId: course._id
+          }))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { courseName: string; assignments: any[] }>);
+
+    const allAssignments = enrolledCourses.flatMap((course) =>
+      (course.assignments || []).map((assignment) => ({
+        ...assignment,
+        courseName: course.title,
+        courseId: course._id
+      }))
+    );
+
+    // Sort assignments by due date
+    const sortedAssignments = allAssignments.sort((a, b) => 
+      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+
+    return (
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Assignments
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {allAssignments.length}
+                </h3>
+              </div>
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                <ClipboardDocumentCheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-300" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Upcoming Due
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {sortedAssignments.filter(a => new Date(a.dueDate) > new Date()).length}
+                </h3>
+              </div>
+              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Assignments List */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Course Assignments
+            </h2>
+          </div>
+          
+          <div className="space-y-8">
+            {Object.entries(assignmentsByCourse).map(([courseId, { courseName, assignments }]) => (
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                      <ClipboardDocumentCheckIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {assignments.map((assignment) => (
+                    <button
+                      key={assignment._id}
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setIsAssignmentModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                            <ClipboardDocumentCheckIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                              {assignment.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <ArrowRightIcon className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {Object.keys(assignmentsByCourse).length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-500 dark:text-gray-400">
+                  No assignments available
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Assignment Modal */}
+        {selectedAssignment && isAssignmentModalOpen && (
+          <AssignmentModal
+            assignment={selectedAssignment}
+            onClose={() => setIsAssignmentModalOpen(false)}
+          />
+        )}
+      </div>
+    );
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -1118,6 +1272,8 @@ export default function StudentDashboard() {
         return <CalendarView />;
       case 'available-courses':
         return <AvailableCoursesView />;
+      case 'assignments':
+        return <AssignmentsView />;
       default:
         return <DashboardStats />;
     }
