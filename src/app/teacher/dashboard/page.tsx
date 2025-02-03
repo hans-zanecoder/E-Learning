@@ -15,16 +15,26 @@ import {
   XMarkIcon,
   ClipboardDocumentCheckIcon,
   PlusIcon,
+  ClockIcon,
+  PencilIcon,
 } from '@heroicons/react/24/outline';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
+
+interface ExamSubmission {
+  _id: string;
+  studentId: string;
+  studentName: string;
+  score: number;
+  submittedAt: string;
+}
 
 interface Exam {
   _id: string;
   title: string;
   description: string;
   courseId: string;
-  examQuestionId: string;
-  score: number;
+  totalScore: number;
+  submissions?: ExamSubmission[];
   createdAt: string;
   updatedAt: string;
 }
@@ -575,6 +585,381 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
   );
 };
 
+const TeacherStats = ({ courses }: { courses: Course[] }) => {
+  const totalStudents = courses.reduce((acc, course) => 
+    acc + (course.enrolledStudents?.length || 0), 0
+  );
+
+  const totalExams = courses.reduce((acc, course) => 
+    acc + (course.exams?.length || 0), 0
+  );
+
+  const totalAssignments = courses.reduce((acc, course) => 
+    acc + (course.assignments?.length || 0), 0
+  );
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+            <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div className="ml-4">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+            <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+          </div>
+          <div className="ml-4">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+            <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="ml-4">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center">
+          <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+            <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+          </div>
+          <div className="ml-4">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ManageLessons = ({ courses, fetchTeacherCourses, user }: { 
+  courses: Course[],
+  fetchTeacherCourses: (teacherId: string, token: string) => Promise<void>,
+  user: any
+}) => {
+  const [editingLesson, setEditingLesson] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const handleUpdateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      console.log('Updating lesson with data:', editingLesson);
+
+      const response = await fetch(`/api/teacher/courses/${editingLesson.courseId}/lessons/${editingLesson._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editingLesson.title,
+          content: editingLesson.content,
+          dueDate: editingLesson.dueDate
+        }),
+      });
+
+      const responseData = await response.text();
+      let parsedData;
+      
+      try {
+        parsedData = JSON.parse(responseData);
+      } catch (e) {
+        console.error('Raw response:', responseData);
+        throw new Error(`Server error: ${responseData.substring(0, 200)}...`);
+      }
+
+      if (!response.ok) {
+        throw new Error(parsedData.message || `Failed to update lesson: ${response.status}`);
+      }
+
+      await swalSuccess({ text: 'Lesson updated successfully' });
+      setIsEditModalOpen(false);
+      fetchTeacherCourses(user._id, token!);
+    } catch (error: any) {
+      console.error('Error updating lesson:', error);
+      swalError(error);
+    }
+  };
+
+  const allLessons = courses.flatMap((course, courseIndex) => 
+    (course.lessons || []).map((lesson, lessonIndex) => ({
+      ...lesson,
+      courseName: course.name,
+      courseId: course._id,
+      uniqueKey: lesson._id 
+        ? `${course._id}-${lesson._id}` 
+        : `${course._id}-lesson-${lessonIndex}`
+    }))
+  );
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+        Manage Lessons
+      </h2>
+
+      <div className="grid gap-6">
+        {allLessons.map((lesson) => (
+          <div
+            key={lesson.uniqueKey}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="flex-shrink-0 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {lesson.title || 'Untitled Lesson'}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Course: {lesson.courseName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 prose prose-sm dark:prose-invert max-w-none">
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {lesson.content || 'No content available'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingLesson({
+                      _id: lesson._id,
+                      courseId: lesson.courseId,
+                      courseName: lesson.courseName,
+                      title: lesson.title || '',
+                      content: lesson.content || '',
+                      dueDate: lesson.dueDate ? new Date(lesson.dueDate).toISOString().split('T')[0] : ''
+                    });
+                    setIsEditModalOpen(true);
+                  }}
+                  className="ml-4 inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  <PencilIcon className="h-4 w-4 mr-1.5" />
+                  Edit
+                </button>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                  <ClockIcon className="h-4 w-4 mr-1.5" />
+                  Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Edit Lesson Modal */}
+      {isEditModalOpen && editingLesson && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Edit Lesson
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Course: {editingLesson.courseName}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateLesson} className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">
+                  Lesson Title
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter lesson title"
+                  value={editingLesson.title}
+                  onChange={(e) => setEditingLesson({ ...editingLesson, title: e.target.value })}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 text-gray-900 dark:text-white font-medium"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">
+                  Lesson Content
+                </label>
+                <textarea
+                  placeholder="Enter lesson content"
+                  value={editingLesson.content}
+                  onChange={(e) => setEditingLesson({ ...editingLesson, content: e.target.value })}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 text-gray-900 dark:text-white"
+                  rows={6}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  value={editingLesson.dueDate ? editingLesson.dueDate.split('T')[0] : ''}
+                  onChange={(e) => setEditingLesson({ ...editingLesson, dueDate: e.target.value })}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Update Lesson
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ExamsList = ({ courses }: { courses: Course[] }) => {
+  const allExams = courses.flatMap((course) => 
+    (course.exams || []).map((exam) => ({
+      ...exam,
+      courseName: course.name,
+      courseId: course._id,
+      uniqueKey: `${course._id}-${exam._id}`
+    }))
+  );
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+        Manage Exams
+      </h2>
+
+      <div className="grid gap-6">
+        {allExams.map((exam) => (
+          <div
+            key={exam.uniqueKey}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="flex-shrink-0 p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+                      <AcademicCapIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {exam.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Course: {exam.courseName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 prose prose-sm dark:prose-invert max-w-none">
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {exam.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Student Results Section */}
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
+                  Student Results
+                </h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Student Name
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Score
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Submission Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {exam.submissions?.map((submission: any) => (
+                        <tr key={submission._id}>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {submission.studentName}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {submission.score}/{exam.totalScore}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(submission.submittedAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                      {(!exam.submissions || exam.submissions.length === 0) && (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                            No submissions yet
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function TeacherDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -716,86 +1101,54 @@ export default function TeacherDashboard() {
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Assigned Courses
-                </p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {courses.length}
-                </h3>
-              </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-                <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-300" />
-              </div>
-            </div>
-          </div>
+        <TeacherStats courses={courses} />
 
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Students
-                </p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {totalStudents}
-                </h3>
-              </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-                <UsersIcon className="w-6 h-6 text-green-600 dark:text-green-300" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            My Assigned Courses
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map((course) => (
-              <div
-                key={course._id}
-                className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-              >
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                        <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
-                        {course.name}
-                      </h3>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+          My Assigned Courses
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courses.map((course) => (
+            <div
+              key={course._id}
+              className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                      Active
-                    </span>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
+                      {course.name}
+                    </h3>
                   </div>
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    Active
+                  </span>
+                </div>
 
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                    {course.description}
-                  </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                  {course.description}
+                </p>
 
-                  <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        <UsersIcon className="h-4 w-4 inline mr-1" />
-                        {course.enrolledStudents?.length || 0} students
-                      </div>
-                      <button
-                        onClick={() => setSelectedCourseModal(course)}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-                      >
-                        View Details →
-                      </button>
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <UsersIcon className="h-4 w-4 inline mr-1" />
+                      {course.enrolledStudents?.length || 0} students
                     </div>
+                    <button
+                      onClick={() => setSelectedCourseModal(course)}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                    >
+                      View Details →
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
 
         {selectedCourseModal && (
           <CourseDetailsModal
@@ -819,6 +1172,10 @@ export default function TeacherDashboard() {
         ) : (
           <DashboardStats />
         );
+      case 'lessons':
+        return <ManageLessons courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
+      case 'exams':
+        return <ExamsList courses={courses} />;
       default:
         return <DashboardStats />;
     }
