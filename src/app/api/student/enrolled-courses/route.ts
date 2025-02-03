@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/app/lib/db';
 import { verifyJWT } from '@/app/lib/jwt';
-import Course from '@/app/models/Course';
-import Enrollment from '@/app/models/Enrollment';
+import { Course, Teacher, Enrollment } from '@/app/models';
 import mongoose from 'mongoose';
 
 // Define Lesson Schema if not already registered
@@ -75,20 +74,9 @@ export async function GET(request: Request) {
     const enrolledCourses = await Course.find({
       _id: { $in: courseIds }
     })
-    .populate({
-      path: 'teacherId',
-      select: 'fullName email username',
-      model: 'Teacher'
-    })
-    .populate({
-      path: 'lessons',
-      select: 'title content dueDate studentProgress createdAt description',
-      model: 'Lesson'
-    })
-    .populate({
-      path: 'exams',
-      model: 'Exam'
-    })
+    .populate('teacherId')
+    .populate('lessons')
+    .populate('exams')
     .lean();
 
     // Transform the courses data to include completion status

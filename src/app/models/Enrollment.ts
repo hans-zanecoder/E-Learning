@@ -49,5 +49,6 @@ const enrollmentSchema = new Schema<IEnrollment>(
   }
 );
 
+export { enrollmentSchema };
 export default mongoose.models.Enrollment ||
   mongoose.model<IEnrollment>('Enrollment', enrollmentSchema);

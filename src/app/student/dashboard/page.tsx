@@ -461,11 +461,11 @@ export default function StudentDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                          {course.teacherId?.fullName?.charAt(0) || 'T'}
+                          {course.teachers && course.teachers[0]?.fullName?.charAt(0) || 'T'}
                         </span>
                       </div>
                       <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                        {course.teacherId?.fullName || 'Teacher'}
+                        {course.teachers && course.teachers[0]?.fullName || 'Teacher'}
                       </span>
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -683,6 +683,21 @@ export default function StudentDashboard() {
   };
 
   const ExamsView = () => {
+    // Group exams by course
+    const examsByCourse = enrolledCourses.reduce((acc, course) => {
+      if (course.exams && course.exams.length > 0) {
+        acc[course._id] = {
+          courseName: course.title,
+          exams: course.exams.map(exam => ({
+            ...exam,
+            courseName: course.title,
+            courseId: course._id
+          }))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { courseName: string; exams: any[] }>);
+
     const handleExamSubmit = async (score: number) => {
       try {
         const token = localStorage.getItem('token');
@@ -768,51 +783,86 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Exams List */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[calc(100vh-13rem)] overflow-y-auto">
+        {/* Exams List - Redesigned */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Available Exams
-            </h2>
+            <div className="flex items-center space-x-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Available Exams
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                •
+              </span>
+              <div className="flex items-center space-x-2">
+                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {enrolledCourses[0]?.teachers?.[0]?.fullName?.charAt(0) || 'T'}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {enrolledCourses[0]?.teachers?.[0]?.fullName || 'Teacher'}
+                </span>
+              </div>
+            </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {enrolledCourses.map((course) =>
-              course.exams?.map((exam) => (
-                <div
-                  key={exam._id}
-                  className="group bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200 hover:shadow-lg"
-                >
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                          <AcademicCapIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+
+          <div className="space-y-8">
+            {Object.entries(examsByCourse).map(([courseId, { courseName, exams }]) => (
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                      <AcademicCapIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {exams.length} {exams.length === 1 ? 'exam' : 'exams'}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {exams.map((exam) => (
+                    <button
+                      key={exam._id}
+                      onClick={() => {
+                        setSelectedExam(exam);
+                        setIsExamModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
+                        relative overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                            <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                              {exam.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Duration: {exam.duration} minutes
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {exam.title}
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {course.title}
-                          </p>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                            Start Exam
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedExam(exam);
-                          setIsExamModalOpen(true);
-                        }}
-                        className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
-                      >
-                        Start Exam
-                        <ArrowRightIcon className="w-4 h-4 ml-2" />
-                      </button>
-                    </div>
-                  </div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -861,9 +911,6 @@ export default function StudentDashboard() {
       (lesson) => !lesson.completed && new Date(lesson.dueDate) > new Date()
     );
     const completedLessons = sortedLessons.filter((lesson) => lesson.completed);
-
-    const [selectedLesson, setSelectedLesson] = useState<any>(null);
-    const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
 
     return (
       <div className="space-y-6">
@@ -918,66 +965,91 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Lessons List */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[calc(100vh-13rem)] overflow-y-auto">
+        {/* Lessons List - Redesigned */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Course Lessons
-            </h2>
+            <div className="flex items-center space-x-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Course Lessons
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                •
+              </span>
+              <div className="flex items-center space-x-2">
+                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {enrolledCourses[0]?.teachers?.[0]?.fullName?.charAt(0) || 'T'}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {enrolledCourses[0]?.teachers?.[0]?.fullName || 'Teacher'}
+                </span>
+              </div>
+            </div>
           </div>
           
           <div className="space-y-8">
             {Object.entries(lessonsByCourse).map(([courseId, { courseName, lessons }]) => (
-              <div key={courseId}>
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                    <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                      <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    {courseName}
-                  </h3>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <div className="space-y-3">
                   {lessons.map((lesson) => (
-                    <div
+                    <button
                       key={lesson._id}
-                      className="group bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200 hover:shadow-lg"
+                      onClick={() => {
+                        setSelectedLesson(lesson);
+                        setIsLessonModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
+                        relative overflow-hidden"
                     >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-4">
-                          <div className={`p-3 ${
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className={`flex-shrink-0 p-2 rounded-lg ${
                             lesson.completed 
                               ? 'bg-green-100 dark:bg-green-900/30' 
                               : 'bg-blue-100 dark:bg-blue-900/30'
-                            } rounded-xl`}
+                            }`}
                           >
                             {lesson.completed ? (
-                              <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
+                              <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                             ) : (
-                              <BookmarkIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                              <BookmarkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             )}
                           </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                               {lesson.title}
-                            </h3>
+                            </h4>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Lesson Given on: {new Date(lesson.dueDate).toLocaleDateString()}
+                              Due: {new Date(lesson.dueDate).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                            View Details
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedLesson(lesson);
-                          setIsLessonModalOpen(true);
-                        }}
-                        className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
-                      >
-                        View Content
-                        <ArrowRightIcon className="w-4 h-4 ml-2" />
-                      </button>
-                    </div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   ))}
                 </div>
               </div>

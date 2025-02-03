@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import Course from './Course';
 
 export interface ITeacher extends Document {
   _id: string;
@@ -20,7 +19,7 @@ const teacherSchema = new Schema<ITeacher>(
   {
     _id: {
       type: String,
-      default: uuidv4,
+      default: () => uuidv4(),
     },
     username: {
       type: String,
@@ -59,6 +58,7 @@ const teacherSchema = new Schema<ITeacher>(
   }
 );
 
+
 teacherSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
@@ -66,6 +66,7 @@ teacherSchema.pre('save', async function (next) {
   next();
 });
 
-const Teacher =
-  mongoose.models.Teacher || mongoose.model<ITeacher>('Teacher', teacherSchema);
+export { teacherSchema };
+
+const Teacher = mongoose.models.Teacher || mongoose.model<ITeacher>('Teacher', teacherSchema);
 export default Teacher;
