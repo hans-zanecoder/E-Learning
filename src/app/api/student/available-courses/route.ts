@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import  connectDB  from '@/app/lib/db';
+import connectDB from '@/app/lib/db';
 import { verifyJWT } from '@/app/lib/jwt';
 import Course from '@/app/models/Course';
-import Student from '@/app/models/Student';
 
 export async function GET(request: Request) {
   try {
@@ -18,13 +17,9 @@ export async function GET(request: Request) {
 
     await connectDB();
 
-    // Get the student's enrolled course IDs
-    const student = await Student.findById(decoded.id).select('enrolledCourses');
-    const enrolledCourseIds = student?.enrolledCourses || [];
-
-    // Find all courses that the student is not enrolled in
+    // Find all courses where the student is not in enrolledStudents array
     const availableCourses = await Course.find({
-      _id: { $nin: enrolledCourseIds }
+      enrolledStudents: { $nin: [decoded.id] }
     })
     .populate('teacherId', 'fullName')
     .lean();

@@ -28,6 +28,8 @@ import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
 import AssignmentModal from '@/app/components/AssignmentModal';
+import CourseEnrollModal from '../components/CourseEnrollModal';
+import CourseUnenrollModal from '../components/CourseUnenrollModal';
 
 interface CourseDetailsModalProps {
   course: Course;
@@ -150,6 +152,10 @@ export default function StudentDashboard() {
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null);
+  const [isCourseDetailsModalOpen, setIsCourseDetailsModalOpen] = useState(false);
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [isUnenrollModalOpen, setIsUnenrollModalOpen] = useState(false);
 
   const navigation = [
     {
@@ -481,7 +487,7 @@ export default function StudentDashboard() {
           {availableCourses.map((course) => (
             <div
               key={course._id}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col h-full"
             >
               <div className="p-6 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -493,21 +499,13 @@ export default function StudentDashboard() {
                       {course.title}
                     </h3>
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      (course.enrolledStudents?.length || 0) > 0
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    }`}
-                  >
-                    {(course.enrolledStudents?.length || 0) > 0
-                      ? 'Active'
-                      : 'New'}
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    Active
                   </span>
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description || 'No description available'}
+                  {course.description}
                 </p>
 
                 <div className="mt-auto">
@@ -515,18 +513,12 @@ export default function StudentDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                          {(course.teachers &&
-                            course.teachers[0]?.fullName?.charAt(0)) ||
-                            'U'}
+                          {course.teachers?.[0]?.fullName?.charAt(0) || 'T'}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                        {(course.teachers && course.teachers[0]?.fullName) ||
-                          'Unassigned'}
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {course.lessons?.length || 0} lessons
                       </span>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {course.enrolledStudents?.length || 0} students
                     </div>
                   </div>
 
@@ -537,9 +529,10 @@ export default function StudentDashboard() {
                           setSelectedCourse(course);
                           setIsEnrollmentModalOpen(true);
                         }}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm"
+                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium flex items-center"
                       >
-                        Enroll →
+                        Course Details
+                        <ArrowRightIcon className="ml-2 h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -548,55 +541,76 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        <EnrollmentModal
+          isOpen={isEnrollmentModalOpen}
+          closeModal={() => setIsEnrollmentModalOpen(false)}
+          course={selectedCourse}
+          onEnroll={handleEnrollment}
+          onUnenroll={handleDropCourse}
+          isEnrolled={false}
+        />
       </div>
     );
   };
 
   const MyCourses = () => {
-    const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+    const [isUnenrollModalOpen, setIsUnenrollModalOpen] = useState(false);
 
-    useEffect(() => {
-      const fetchEnrolledCourses = async () => {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch('/api/student/enrolled-courses', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to fetch courses');
-          }
-
-          const data = await response.json();
-          setEnrolledCourses(data.courses || []);
-        } catch (error) {
-          console.error('Error fetching enrolled courses:', error);
-          setEnrolledCourses([]);
-        } finally {
-          setLoading(false);
+    const handleUnenroll = async (courseId: string) => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
         }
-      };
 
-      fetchEnrolledCourses();
-    }, []);
+        const response = await fetch(`/api/student/enroll/${courseId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        });
 
-    if (loading) {
-      return (
-        <div className="flex justify-center items-center min-h-[200px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      );
-    }
+        // First get the response text
+        const text = await response.text();
+        
+        // Try to parse it as JSON if there's content
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error('Error parsing response:', e);
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to unenroll from course');
+        }
+
+        await swalSuccess({
+          text: 'Successfully unenrolled from the course'
+        });
+
+        setIsUnenrollModalOpen(false);
+        await fetchEnrolledCourses(); // Refresh the enrolled courses list
+        
+      } catch (error: any) {
+        console.error('Error unenrolling from course:', error);
+        swalError(error, {
+          defaultMessage: 'Failed to unenroll from course'
+        });
+      }
+    };
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          My Enrolled Courses
-        </h2>
-        
+      <div className="mt-6">
+        <div className="sm:flex sm:items-center sm:justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            My Courses
+          </h2>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {enrolledCourses.map((course) => (
             <div
@@ -619,7 +633,7 @@ export default function StudentDashboard() {
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description || 'No description available'}
+                  {course.description}
                 </p>
 
                 <div className="mt-auto">
@@ -627,15 +641,12 @@ export default function StudentDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                          {course.teachers && course.teachers[0]?.fullName?.charAt(0) || 'T'}
+                          {course.teachers?.[0]?.fullName?.charAt(0) || 'T'}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                        {course.teachers && course.teachers[0]?.fullName || 'Teacher'}
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {course.lessons?.length || 0} lessons
                       </span>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {course.lessons?.length || 0} lessons
                     </div>
                   </div>
 
@@ -644,11 +655,12 @@ export default function StudentDashboard() {
                       <button
                         onClick={() => {
                           setSelectedCourse(course);
-                          setIsEnrollmentModalOpen(true);
+                          setIsUnenrollModalOpen(true);
                         }}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                        className="text-blue-600 hover:text-blue-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium flex items-center"
                       >
-                        Course Details →
+                        Course Details
+                        <ArrowRightIcon className="ml-2 h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -657,6 +669,13 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        <CourseUnenrollModal
+          isOpen={isUnenrollModalOpen}
+          closeModal={() => setIsUnenrollModalOpen(false)}
+          course={selectedCourse}
+          onUnenroll={handleUnenroll}
+        />
       </div>
     );
   };
@@ -1474,8 +1493,8 @@ export default function StudentDashboard() {
           closeModal={() => setIsEnrollmentModalOpen(false)}
           course={selectedCourse}
           onEnroll={handleEnrollment}
-          onUnenroll={() => handleDropCourse(selectedCourse._id)}
-          isEnrolled={true}
+          onUnenroll={handleDropCourse}
+          isEnrolled={false}
         />
       )}
 

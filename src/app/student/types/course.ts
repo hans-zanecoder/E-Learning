@@ -18,8 +18,8 @@ export interface Course {
   title: string;
   description: string;
   category: string;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   teachers: Array<{
     _id: string;
     fullName: string;
@@ -42,4 +42,5 @@ export interface Course {
     date: string;
     status: 'upcoming' | 'completed' | 'missed';
   }>;
+  assignments?: any[];
 }
