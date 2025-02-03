@@ -49,14 +49,5 @@ studentSchema.pre('save', async function (next) {
   next();
 });
 
-// Delete the model if it exists (for development)
-if (process.env.NODE_ENV === 'development') {
-  delete mongoose.models.Student;
-}
-
-const Student =
-  mongoose.models.Student || mongoose.model<IStudent>('Student', studentSchema);
-export default Student;
-
-// Make sure to call connectDB() before using the Student model
-await connectDB();
+export { studentSchema };
+export default mongoose.models.Student || mongoose.model<IStudent>('Student', studentSchema);

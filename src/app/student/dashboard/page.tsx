@@ -9,6 +9,7 @@ import {
   BookOpenIcon,
   ArrowLeftOnRectangleIcon,
   UserCircleIcon,
+  ClipboardDocumentCheckIcon,
   AcademicCapIcon,
   UsersIcon,
   ClockIcon,
@@ -16,6 +17,7 @@ import {
   BookmarkIcon,
   CheckCircleIcon,
   ArrowRightIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import EnrollmentModal from '../components/EnrollmentModal';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
@@ -25,6 +27,107 @@ import { Enrollment } from '../types/enrollment';
 import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
+import AssignmentModal from '@/app/components/AssignmentModal';
+import CourseEnrollModal from '../components/CourseEnrollModal';
+import CourseUnenrollModal from '../components/CourseUnenrollModal';
+
+interface CourseDetailsModalProps {
+  course: Course;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const CourseDetailsModal = ({ course, isOpen, onClose }: CourseDetailsModalProps) => {
+  const [activeTab, setActiveTab] = useState('lessons');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="fixed inset-0 bg-black opacity-30"></div>
+        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{course.title}</h2>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => {
+                  onClose();
+                  confirmDropCourse(course._id);
+                }}
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+              >
+                Drop Course
+              </button>
+              <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            {activeTab === 'lessons' && (
+              <div className="space-y-4">
+                {course.lessons?.map((lesson) => (
+                  <div key={lesson._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{lesson.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'assignments' && (
+              <div className="space-y-4">
+                {course.assignments?.map((assignment) => (
+                  <div key={assignment._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{assignment.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                      <span className="ml-2">Points: {assignment.totalScore}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'exams' && (
+              <div className="space-y-4">
+                {course.exams?.map((exam) => (
+                  <div key={exam._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{exam.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Duration: {exam.duration} minutes
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'schedule' && (
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div className="mb-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white">Course Schedule</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Start Date: {new Date(course.startDate as string).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white">Teacher</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {course.teachers?.[0]?.fullName || 'Not assigned'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -46,6 +149,13 @@ export default function StudentDashboard() {
   const [isExamModalOpen, setIsExamModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<any>(null);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null);
+  const [isCourseDetailsModalOpen, setIsCourseDetailsModalOpen] = useState(false);
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [isUnenrollModalOpen, setIsUnenrollModalOpen] = useState(false);
 
   const navigation = [
     {
@@ -77,6 +187,11 @@ export default function StudentDashboard() {
       name: 'Available Courses',
       icon: PlusCircleIcon,
       view: 'available-courses',
+    },
+    {
+      name: 'Assignments',
+      icon: ClipboardDocumentCheckIcon,
+      view: 'assignments',
     },
     {
       name: 'Profile',
@@ -126,6 +241,12 @@ export default function StudentDashboard() {
     const pollInterval = setInterval(fetchEnrolledCourses, 30000);
     return () => clearInterval(pollInterval);
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchAvailableCourses();
+    }
+  }, [user]);
 
   const fetchCourses = async () => {
     try {
@@ -223,7 +344,7 @@ export default function StudentDashboard() {
   };
 
   const isEnrolled = (courseId: string) => {
-    return user?.enrolledCourses?.includes(courseId);
+    return user?.enrolledCourses?.includes(courseId) || false;
   };
 
   const handleEnrollClick = (course: Course) => {
@@ -268,26 +389,45 @@ export default function StudentDashboard() {
   const handleDropCourse = async (courseId: string) => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const response = await fetch(`/api/student/enroll/${courseId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
       });
 
+      // First get the response text
+      const text = await response.text();
+      
+      // Try to parse it as JSON if there's content
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        console.error('Error parsing response:', e);
+      }
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error);
+        throw new Error(data?.error || 'Failed to drop course');
       }
 
       await swalSuccess({
         text: 'Successfully dropped the course'
       });
 
-      fetchEnrolledCourses();
+      setIsEnrollmentModalOpen(false);
+      await fetchEnrolledCourses(); // Refresh the enrolled courses list
+      
     } catch (error: any) {
       console.error('Error dropping course:', error);
-      swalError(error);
+      swalError(error, {
+        defaultMessage: 'Failed to drop course'
+      });
     }
   };
 
@@ -302,6 +442,38 @@ export default function StudentDashboard() {
     }
   };
 
+  const fetchAvailableCourses = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch('/api/student/available-courses', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch available courses');
+      }
+
+      setAvailableCourses(data.courses);
+    } catch (error: any) {
+      console.error('Error fetching available courses:', error);
+      swalError(error, {
+        defaultMessage: 'Failed to fetch available courses'
+      });
+      setAvailableCourses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const AvailableCoursesView = () => {
     return (
       <div className="mt-6">
@@ -312,10 +484,10 @@ export default function StudentDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
+          {availableCourses.map((course) => (
             <div
               key={course._id}
-              className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 flex flex-col h-full"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col h-full"
             >
               <div className="p-6 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -327,21 +499,13 @@ export default function StudentDashboard() {
                       {course.title}
                     </h3>
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      (course.enrolledStudents?.length || 0) > 0
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    }`}
-                  >
-                    {(course.enrolledStudents?.length || 0) > 0
-                      ? 'Active'
-                      : 'New'}
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    Active
                   </span>
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description || 'No description available'}
+                  {course.description}
                 </p>
 
                 <div className="mt-auto">
@@ -349,18 +513,12 @@ export default function StudentDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                          {(course.teachers &&
-                            course.teachers[0]?.fullName?.charAt(0)) ||
-                            'U'}
+                          {course.teachers?.[0]?.fullName?.charAt(0) || 'T'}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                        {(course.teachers && course.teachers[0]?.fullName) ||
-                          'Unassigned'}
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {course.lessons?.length || 0} lessons
                       </span>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {course.enrolledStudents?.length || 0} students
                     </div>
                   </div>
 
@@ -371,9 +529,10 @@ export default function StudentDashboard() {
                           setSelectedCourse(course);
                           setIsEnrollmentModalOpen(true);
                         }}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm"
+                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium flex items-center"
                       >
-                        Enroll →
+                        Course Details
+                        <ArrowRightIcon className="ml-2 h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -382,55 +541,76 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        <EnrollmentModal
+          isOpen={isEnrollmentModalOpen}
+          closeModal={() => setIsEnrollmentModalOpen(false)}
+          course={selectedCourse}
+          onEnroll={handleEnrollment}
+          onUnenroll={handleDropCourse}
+          isEnrolled={false}
+        />
       </div>
     );
   };
 
   const MyCourses = () => {
-    const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+    const [isUnenrollModalOpen, setIsUnenrollModalOpen] = useState(false);
 
-    useEffect(() => {
-      const fetchEnrolledCourses = async () => {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch('/api/student/enrolled-courses', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to fetch courses');
-          }
-
-          const data = await response.json();
-          setEnrolledCourses(data.courses || []);
-        } catch (error) {
-          console.error('Error fetching enrolled courses:', error);
-          setEnrolledCourses([]);
-        } finally {
-          setLoading(false);
+    const handleUnenroll = async (courseId: string) => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
         }
-      };
 
-      fetchEnrolledCourses();
-    }, []);
+        const response = await fetch(`/api/student/enroll/${courseId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        });
 
-    if (loading) {
-      return (
-        <div className="flex justify-center items-center min-h-[200px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      );
-    }
+        // First get the response text
+        const text = await response.text();
+        
+        // Try to parse it as JSON if there's content
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error('Error parsing response:', e);
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to unenroll from course');
+        }
+
+        await swalSuccess({
+          text: 'Successfully unenrolled from the course'
+        });
+
+        setIsUnenrollModalOpen(false);
+        await fetchEnrolledCourses(); // Refresh the enrolled courses list
+        
+      } catch (error: any) {
+        console.error('Error unenrolling from course:', error);
+        swalError(error, {
+          defaultMessage: 'Failed to unenroll from course'
+        });
+      }
+    };
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          My Enrolled Courses
-        </h2>
-        
+      <div className="mt-6">
+        <div className="sm:flex sm:items-center sm:justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            My Courses
+          </h2>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {enrolledCourses.map((course) => (
             <div
@@ -453,7 +633,7 @@ export default function StudentDashboard() {
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description || 'No description available'}
+                  {course.description}
                 </p>
 
                 <div className="mt-auto">
@@ -461,26 +641,27 @@ export default function StudentDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                          {course.teacherId?.fullName?.charAt(0) || 'T'}
+                          {course.teachers?.[0]?.fullName?.charAt(0) || 'T'}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                        {course.teacherId?.fullName || 'Teacher'}
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {course.lessons?.length || 0} lessons
                       </span>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {course.lessons?.length || 0} lessons
                     </div>
                   </div>
 
                   <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
                     <div className="flex justify-end">
-                      <Link
-                        href={`/student/courses/${course._id}`}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                      <button
+                        onClick={() => {
+                          setSelectedCourse(course);
+                          setIsUnenrollModalOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium flex items-center"
                       >
-                        View Course →
-                      </Link>
+                        Course Details
+                        <ArrowRightIcon className="ml-2 h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -488,6 +669,13 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        <CourseUnenrollModal
+          isOpen={isUnenrollModalOpen}
+          closeModal={() => setIsUnenrollModalOpen(false)}
+          course={selectedCourse}
+          onUnenroll={handleUnenroll}
+        />
       </div>
     );
   };
@@ -538,7 +726,7 @@ export default function StudentDashboard() {
   };
 
   const DashboardStats = () => {
-    // Get all lessons from enrolled courses
+    // Process lessons
     const allLessons = enrolledCourses.flatMap((course) =>
       (course.lessons || []).map((lesson) => ({
         ...lesson,
@@ -546,16 +734,18 @@ export default function StudentDashboard() {
       }))
     );
 
-    // Sort lessons by due date
-    const sortedLessons = allLessons.sort((a, b) => 
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-    );
+    // Add counts for enrolled and finished courses
+    const enrolledCoursesCount = enrolledCourses.length;
+    const finishedCoursesCount = enrolledCourses.filter(
+      course => course.status === 'completed'
+    ).length;
 
-    // Get upcoming lessons (not completed and due date not passed)
-    const upcomingLessons = sortedLessons.filter(
-      (lesson) => 
-        !lesson.completed && 
-        new Date(lesson.dueDate) > new Date()
+    // Process exams
+    const allExams = enrolledCourses.flatMap((course) =>
+      (course.exams || []).map((exam) => ({
+        ...exam,
+        courseName: course.title,
+      }))
     );
 
     return (
@@ -570,7 +760,7 @@ export default function StudentDashboard() {
                   Enrolled Courses
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {dashboardStats.enrolledCourses}
+                  {enrolledCoursesCount}
                 </h3>
               </div>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
@@ -609,11 +799,7 @@ export default function StudentDashboard() {
                   Finished Courses
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {
-                    enrolledCourses.filter(
-                      (course) => course.enrollment?.status === 'completed'
-                    ).length
-                  }
+                  {finishedCoursesCount}
                 </h3>
               </div>
               <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full">
@@ -623,58 +809,93 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* New Lessons Section */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Upcoming Lessons
-            </h2>
-            <button 
-              onClick={() => setCurrentView('lessons')}
-              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {upcomingLessons.slice(0, 3).map((lesson) => (
-              <div
-                key={lesson._id}
-                className="group p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Next Exam Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Next Exam
+              </h3>
+              <button 
+                onClick={() => setCurrentView('exams')}
+                className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
               >
-                <div className="flex items-center justify-between">
+                View All
+              </button>
+            </div>
+
+            {allExams.length > 0 ? (
+              <div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                      <BookOpenIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {lesson.title}
-                      </h3>
+                    <div className="flex-1">
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {allExams[0].title}
+                      </h4>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {lesson.courseName}
+                        {allExams[0].courseName} • {allExams[0].duration} min
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                </div>
+                {allExams.length > 1 && (
+                  <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                    and {allExams.length - 1} other {allExams.length - 1 === 1 ? 'exam' : 'exams'}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400">
+                No upcoming exams
+              </p>
+            )}
+          </div>
+
+          {/* Recent Lessons Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Recent Lessons
+              </h3>
+              <button 
+                onClick={() => setCurrentView('lessons')}
+                className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                View All
+              </button>
+            </div>
+
+            {allLessons.length > 0 ? (
+              <div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <BookmarkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(lesson.dueDate).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <div className="flex-1">
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {allLessons[0].title}
+                      </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {allLessons[0].courseName} • Due {new Date(allLessons[0].dueDate).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                 </div>
+                {allLessons.length > 1 && (
+                  <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                    and {allLessons.length - 1} other {allLessons.length - 1 === 1 ? 'lesson' : 'lessons'}
+                  </p>
+                )}
               </div>
-            ))}
-            {upcomingLessons.length === 0 && (
-              <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                No upcoming lessons
-              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400">
+                No lessons available
+              </p>
             )}
           </div>
         </div>
@@ -683,6 +904,21 @@ export default function StudentDashboard() {
   };
 
   const ExamsView = () => {
+    // Group exams by course
+    const examsByCourse = enrolledCourses.reduce((acc, course) => {
+      if (course.exams && course.exams.length > 0) {
+        acc[course._id] = {
+          courseName: course.title,
+          exams: course.exams.map(exam => ({
+            ...exam,
+            courseName: course.title,
+            courseId: course._id
+          }))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { courseName: string; exams: any[] }>);
+
     const handleExamSubmit = async (score: number) => {
       try {
         const token = localStorage.getItem('token');
@@ -768,51 +1004,86 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Exams List */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[calc(100vh-13rem)] overflow-y-auto">
+        {/* Exams List - Redesigned */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Available Exams
-            </h2>
+            <div className="flex items-center space-x-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Available Exams
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                •
+              </span>
+              <div className="flex items-center space-x-2">
+                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {enrolledCourses[0]?.teachers?.[0]?.fullName?.charAt(0) || 'T'}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {enrolledCourses[0]?.teachers?.[0]?.fullName || 'Teacher'}
+                </span>
+              </div>
+            </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {enrolledCourses.map((course) =>
-              course.exams?.map((exam) => (
-                <div
-                  key={exam._id}
-                  className="group bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200 hover:shadow-lg"
-                >
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                          <AcademicCapIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+
+          <div className="space-y-8">
+            {Object.entries(examsByCourse).map(([courseId, { courseName, exams }]) => (
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                      <AcademicCapIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {exams.length} {exams.length === 1 ? 'exam' : 'exams'}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {exams.map((exam) => (
+                    <button
+                      key={exam._id}
+                      onClick={() => {
+                        setSelectedExam(exam);
+                        setIsExamModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
+                        relative overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                            <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                              {exam.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Duration: {exam.duration} minutes
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {exam.title}
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {course.title}
-                          </p>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                            Start Exam
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedExam(exam);
-                          setIsExamModalOpen(true);
-                        }}
-                        className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
-                      >
-                        Start Exam
-                        <ArrowRightIcon className="w-4 h-4 ml-2" />
-                      </button>
-                    </div>
-                  </div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -861,9 +1132,6 @@ export default function StudentDashboard() {
       (lesson) => !lesson.completed && new Date(lesson.dueDate) > new Date()
     );
     const completedLessons = sortedLessons.filter((lesson) => lesson.completed);
-
-    const [selectedLesson, setSelectedLesson] = useState<any>(null);
-    const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
 
     return (
       <div className="space-y-6">
@@ -918,66 +1186,91 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Lessons List */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[calc(100vh-13rem)] overflow-y-auto">
+        {/* Lessons List - Redesigned */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Course Lessons
-            </h2>
+            <div className="flex items-center space-x-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Course Lessons
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                •
+              </span>
+              <div className="flex items-center space-x-2">
+                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {enrolledCourses[0]?.teachers?.[0]?.fullName?.charAt(0) || 'T'}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {enrolledCourses[0]?.teachers?.[0]?.fullName || 'Teacher'}
+                </span>
+              </div>
+            </div>
           </div>
           
           <div className="space-y-8">
             {Object.entries(lessonsByCourse).map(([courseId, { courseName, lessons }]) => (
-              <div key={courseId}>
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                    <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                      <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    {courseName}
-                  </h3>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <div className="space-y-3">
                   {lessons.map((lesson) => (
-                    <div
+                    <button
                       key={lesson._id}
-                      className="group bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200 hover:shadow-lg"
+                      onClick={() => {
+                        setSelectedLesson(lesson);
+                        setIsLessonModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
+                        relative overflow-hidden"
                     >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-4">
-                          <div className={`p-3 ${
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className={`flex-shrink-0 p-2 rounded-lg ${
                             lesson.completed 
                               ? 'bg-green-100 dark:bg-green-900/30' 
                               : 'bg-blue-100 dark:bg-blue-900/30'
-                            } rounded-xl`}
+                            }`}
                           >
                             {lesson.completed ? (
-                              <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
+                              <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                             ) : (
-                              <BookmarkIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                              <BookmarkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             )}
                           </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                               {lesson.title}
-                            </h3>
+                            </h4>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Lesson Given on: {new Date(lesson.dueDate).toLocaleDateString()}
+                              Due: {new Date(lesson.dueDate).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                            View Details
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          setSelectedLesson(lesson);
-                          setIsLessonModalOpen(true);
-                        }}
-                        className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
-                      >
-                        View Content
-                        <ArrowRightIcon className="w-4 h-4 ml-2" />
-                      </button>
-                    </div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   ))}
                 </div>
               </div>
@@ -991,6 +1284,89 @@ export default function StudentDashboard() {
             onClose={() => setIsLessonModalOpen(false)}
           />
         )}
+      </div>
+    );
+  };
+
+  const AssignmentsView = () => {
+    // Group assignments by course
+    const assignmentsByCourse = enrolledCourses.reduce((acc, course) => {
+      if (course.assignments && course.assignments.length > 0) {
+        acc[course._id] = {
+          courseName: course.title,
+          assignments: course.assignments.map(assignment => ({
+            ...assignment,
+            courseName: course.title,
+            courseId: course._id
+          }))
+        };
+      }
+      return acc;
+    }, {} as Record<string, { courseName: string; assignments: any[] }>);
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+            Course Assignments
+          </h2>
+          
+          <div className="space-y-8">
+            {Object.entries(assignmentsByCourse).map(([courseId, { courseName, assignments }]) => (
+              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                      <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {courseName}
+                    </h3>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {assignments.map((assignment) => (
+                    <button
+                      key={assignment._id}
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setIsAssignmentModalOpen(true);
+                      }}
+                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                              {assignment.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {assignment.totalScore} points
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1009,6 +1385,8 @@ export default function StudentDashboard() {
         return <CalendarView />;
       case 'available-courses':
         return <AvailableCoursesView />;
+      case 'assignments':
+        return <AssignmentsView />;
       default:
         return <DashboardStats />;
     }
@@ -1115,6 +1493,8 @@ export default function StudentDashboard() {
           closeModal={() => setIsEnrollmentModalOpen(false)}
           course={selectedCourse}
           onEnroll={handleEnrollment}
+          onUnenroll={handleDropCourse}
+          isEnrolled={false}
         />
       )}
 
@@ -1123,6 +1503,14 @@ export default function StudentDashboard() {
         <LessonModal
           lesson={selectedLesson}
           onClose={() => setIsLessonModalOpen(false)}
+        />
+      )}
+
+      {/* Assignment Modal */}
+      {selectedAssignment && isAssignmentModalOpen && (
+        <AssignmentModal
+          assignment={selectedAssignment}
+          onClose={() => setIsAssignmentModalOpen(false)}
         />
       )}
     </>

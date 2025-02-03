@@ -1,55 +1,19 @@
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
-import {
-  XMarkIcon,
-  ClockIcon,
-  UserIcon,
-  AcademicCapIcon,
-} from '@heroicons/react/24/outline';
+import { AcademicCapIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Course } from "../types/course";
 
-interface Course {
-  _id: string;
-  title: string;
-  description: string;
-  category: string;
-  startDate?: string;
-  endDate?: string;
-  teachers: Array<{
-    _id: string;
-    fullName: string;
-    email: string;
-  }>;
-  schedule: Array<{
-    dayOfWeek: string;
-    startTime: string;
-    endTime: string;
-  }>;
-  enrolledStudents?: Array<{
-    _id: string;
-    username: string;
-  }>;
-  lessons?: Array<any>;
-  assignments?: Array<any>;
-  exams?: Array<any>;
-}
-
-interface EnrollmentModalProps {
-  isOpen: boolean;
-  closeModal: () => void;
-  course: Course | null;
-  onEnroll: () => void;
-  onUnenroll: () => void;
-  isEnrolled: boolean;
-}
-
-export default function EnrollmentModal({
+export default function CourseUnenrollModal({
   isOpen,
   closeModal,
   course,
-  onEnroll,
   onUnenroll,
-  isEnrolled,
-}: EnrollmentModalProps) {
+}: {
+  isOpen: boolean;
+  closeModal: () => void;
+  course: Course | null;
+  onUnenroll: (courseId: string) => void;
+}) {
   if (!course) return null;
 
   const formatDate = (dateString: string) => {
@@ -169,83 +133,27 @@ export default function EnrollmentModal({
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
 
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                {/* Warning Message */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                    <p className="text-sm text-blue-600 dark:text-red-400">
-                      Enroll to this course to access all course materials. For questions, contact the instructor.
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      Warning: Unenrolling from this course will remove your access to all course materials and cannot be undone.
                     </p>
                   </div>
                 </div>
-                  </div>
-                )}
-
-                {/* Instructors */}
-                {course.teachers && course.teachers.length > 0 && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      Course Instructors
-                    </h4>
-                    <div className="space-y-3">
-                      {course.teachers.map((teacher) => (
-                        <div
-                          key={teacher._id}
-                          className="flex items-center gap-2"
-                        >
-                          <UserIcon className="h-5 w-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-900 dark:text-white">
-                              {teacher.fullName}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {teacher.email}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Schedule */}
-                {course.schedule && course.schedule.length > 0 && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      Class Schedule
-                    </h4>
-                    <div className="grid grid-cols-1 gap-2">
-                      {course.schedule.map((schedule, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <ClockIcon className="h-5 w-5 text-gray-400" />
-                          <span className="text-sm text-gray-600 dark:text-gray-300">
-                            {schedule.dayOfWeek}: {schedule.startTime} -{' '}
-                            {schedule.endTime}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="mt-6 flex justify-end space-x-3">
-                {isEnrolled ? (
-                  <button
-                    type="button"
-                    className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-                    onClick={onUnenroll}
-                  >
-                    Unenroll from Course
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                    onClick={onEnroll}
-                  >
-                    Enroll in Course
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                  onClick={() => onUnenroll(course._id)}
+                >
+                  Unenroll from Course
+                </button>
                 <button
                   type="button"
                   className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
