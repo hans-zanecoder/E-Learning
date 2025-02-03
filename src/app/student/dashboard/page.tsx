@@ -17,6 +17,7 @@ import {
   BookmarkIcon,
   CheckCircleIcon,
   ArrowRightIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import EnrollmentModal from '../components/EnrollmentModal';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
@@ -27,6 +28,104 @@ import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
 import AssignmentModal from '@/app/components/AssignmentModal';
+
+interface CourseDetailsModalProps {
+  course: Course;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const CourseDetailsModal = ({ course, isOpen, onClose }: CourseDetailsModalProps) => {
+  const [activeTab, setActiveTab] = useState('lessons');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="fixed inset-0 bg-black opacity-30"></div>
+        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{course.title}</h2>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => {
+                  onClose();
+                  confirmDropCourse(course._id);
+                }}
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+              >
+                Drop Course
+              </button>
+              <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            {activeTab === 'lessons' && (
+              <div className="space-y-4">
+                {course.lessons?.map((lesson) => (
+                  <div key={lesson._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{lesson.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Due: {new Date(lesson.dueDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'assignments' && (
+              <div className="space-y-4">
+                {course.assignments?.map((assignment) => (
+                  <div key={assignment._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{assignment.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                      <span className="ml-2">Points: {assignment.totalScore}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'exams' && (
+              <div className="space-y-4">
+                {course.exams?.map((exam) => (
+                  <div key={exam._id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h3 className="font-medium text-gray-900 dark:text-white">{exam.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Duration: {exam.duration} minutes
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'schedule' && (
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div className="mb-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white">Course Schedule</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Start Date: {new Date(course.startDate as string).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <h3 className="font-medium text-gray-900 dark:text-white">Teacher</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {course.teachers?.[0]?.fullName || 'Not assigned'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -50,6 +149,7 @@ export default function StudentDashboard() {
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
 
   const navigation = [
     {
@@ -135,6 +235,12 @@ export default function StudentDashboard() {
     const pollInterval = setInterval(fetchEnrolledCourses, 30000);
     return () => clearInterval(pollInterval);
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchAvailableCourses();
+    }
+  }, [user]);
 
   const fetchCourses = async () => {
     try {
@@ -232,7 +338,7 @@ export default function StudentDashboard() {
   };
 
   const isEnrolled = (courseId: string) => {
-    return user?.enrolledCourses?.includes(courseId);
+    return user?.enrolledCourses?.includes(courseId) || false;
   };
 
   const handleEnrollClick = (course: Course) => {
@@ -277,26 +383,45 @@ export default function StudentDashboard() {
   const handleDropCourse = async (courseId: string) => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const response = await fetch(`/api/student/enroll/${courseId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
       });
 
+      // First get the response text
+      const text = await response.text();
+      
+      // Try to parse it as JSON if there's content
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        console.error('Error parsing response:', e);
+      }
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error);
+        throw new Error(data?.error || 'Failed to drop course');
       }
 
       await swalSuccess({
         text: 'Successfully dropped the course'
       });
 
-      fetchEnrolledCourses();
+      setIsEnrollmentModalOpen(false);
+      await fetchEnrolledCourses(); // Refresh the enrolled courses list
+      
     } catch (error: any) {
       console.error('Error dropping course:', error);
-      swalError(error);
+      swalError(error, {
+        defaultMessage: 'Failed to drop course'
+      });
     }
   };
 
@@ -311,6 +436,38 @@ export default function StudentDashboard() {
     }
   };
 
+  const fetchAvailableCourses = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch('/api/student/available-courses', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch available courses');
+      }
+
+      setAvailableCourses(data.courses);
+    } catch (error: any) {
+      console.error('Error fetching available courses:', error);
+      swalError(error, {
+        defaultMessage: 'Failed to fetch available courses'
+      });
+      setAvailableCourses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const AvailableCoursesView = () => {
     return (
       <div className="mt-6">
@@ -321,10 +478,10 @@ export default function StudentDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
+          {availableCourses.map((course) => (
             <div
               key={course._id}
-              className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 flex flex-col h-full"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
             >
               <div className="p-6 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -484,12 +641,15 @@ export default function StudentDashboard() {
 
                   <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
                     <div className="flex justify-end">
-                      <Link
-                        href={`/student/courses/${course._id}`}
+                      <button
+                        onClick={() => {
+                          setSelectedCourse(course);
+                          setIsEnrollmentModalOpen(true);
+                        }}
                         className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
                       >
-                        View Course →
-                      </Link>
+                        Course Details →
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -569,10 +729,6 @@ export default function StudentDashboard() {
       }))
     );
 
-    const upcomingExams = allExams.filter(
-      (exam) => !exam.completed && new Date(exam.dueDate) > new Date()
-    ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
     return (
       <div className="space-y-6">
         {/* Stats Cards */}
@@ -650,7 +806,7 @@ export default function StudentDashboard() {
               </button>
             </div>
 
-            {upcomingExams.length > 0 ? (
+            {allExams.length > 0 ? (
               <div>
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center space-x-3">
@@ -659,17 +815,17 @@ export default function StudentDashboard() {
                     </div>
                     <div className="flex-1">
                       <h4 className="text-base font-medium text-gray-900 dark:text-white">
-                        {upcomingExams[0].title}
+                        {allExams[0].title}
                       </h4>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {upcomingExams[0].courseName} • {upcomingExams[0].duration} min
+                        {allExams[0].courseName} • {allExams[0].duration} min
                       </p>
                     </div>
                   </div>
                 </div>
-                {upcomingExams.length > 1 && (
+                {allExams.length > 1 && (
                   <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                    and {upcomingExams.length - 1} other {upcomingExams.length - 1 === 1 ? 'exam' : 'exams'}
+                    and {allExams.length - 1} other {allExams.length - 1 === 1 ? 'exam' : 'exams'}
                   </p>
                 )}
               </div>
@@ -1129,71 +1285,20 @@ export default function StudentDashboard() {
       return acc;
     }, {} as Record<string, { courseName: string; assignments: any[] }>);
 
-    const allAssignments = enrolledCourses.flatMap((course) =>
-      (course.assignments || []).map((assignment) => ({
-        ...assignment,
-        courseName: course.title,
-        courseId: course._id
-      }))
-    );
-
-    // Sort assignments by due date
-    const sortedAssignments = allAssignments.sort((a, b) => 
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-    );
-
     return (
       <div className="space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Assignments
-                </p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {allAssignments.length}
-                </h3>
-              </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                <ClipboardDocumentCheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-300" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Upcoming Due
-                </p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {sortedAssignments.filter(a => new Date(a.dueDate) > new Date()).length}
-                </h3>
-              </div>
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Assignments List */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Course Assignments
-            </h2>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+            Course Assignments
+          </h2>
           
           <div className="space-y-8">
             {Object.entries(assignmentsByCourse).map(([courseId, { courseName, assignments }]) => (
               <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className="p-2.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                      <ClipboardDocumentCheckIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                      <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                       {courseName}
@@ -1217,8 +1322,8 @@ export default function StudentDashboard() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <div className="flex-shrink-0 p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
-                            <ClipboardDocumentCheckIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          <div className="flex-shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                           </div>
                           <div>
                             <h4 className="text-base font-medium text-gray-900 dark:text-white">
@@ -1229,31 +1334,20 @@ export default function StudentDashboard() {
                             </p>
                           </div>
                         </div>
-                        <ArrowRightIcon className="w-5 h-5 text-gray-400" />
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {assignment.totalScore} points
+                          </span>
+                          <ArrowRightIcon className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
             ))}
-
-            {Object.keys(assignmentsByCourse).length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">
-                  No assignments available
-                </p>
-              </div>
-            )}
           </div>
         </div>
-
-        {/* Assignment Modal */}
-        {selectedAssignment && isAssignmentModalOpen && (
-          <AssignmentModal
-            assignment={selectedAssignment}
-            onClose={() => setIsAssignmentModalOpen(false)}
-          />
-        )}
       </div>
     );
   };
@@ -1380,6 +1474,8 @@ export default function StudentDashboard() {
           closeModal={() => setIsEnrollmentModalOpen(false)}
           course={selectedCourse}
           onEnroll={handleEnrollment}
+          onUnenroll={() => handleDropCourse(selectedCourse._id)}
+          isEnrolled={true}
         />
       )}
 
@@ -1388,6 +1484,14 @@ export default function StudentDashboard() {
         <LessonModal
           lesson={selectedLesson}
           onClose={() => setIsLessonModalOpen(false)}
+        />
+      )}
+
+      {/* Assignment Modal */}
+      {selectedAssignment && isAssignmentModalOpen && (
+        <AssignmentModal
+          assignment={selectedAssignment}
+          onClose={() => setIsAssignmentModalOpen(false)}
         />
       )}
     </>

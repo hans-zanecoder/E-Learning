@@ -28,6 +28,9 @@ interface Course {
     _id: string;
     username: string;
   }>;
+  lessons?: Array<any>;
+  assignments?: Array<any>;
+  exams?: Array<any>;
 }
 
 interface EnrollmentModalProps {
@@ -35,6 +38,8 @@ interface EnrollmentModalProps {
   closeModal: () => void;
   course: Course | null;
   onEnroll: () => void;
+  onUnenroll: () => void;
+  isEnrolled: boolean;
 }
 
 export default function EnrollmentModal({
@@ -42,6 +47,8 @@ export default function EnrollmentModal({
   closeModal,
   course,
   onEnroll,
+  onUnenroll,
+  isEnrolled,
 }: EnrollmentModalProps) {
   if (!course) return null;
 
@@ -104,6 +111,34 @@ export default function EnrollmentModal({
                   <p className="text-gray-600 dark:text-gray-300">
                     {course.description}
                   </p>
+                </div>
+
+                {/* Course Stats */}
+                <div className="grid grid-cols-3 gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {course.lessons?.length || 0}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Lessons
+                    </div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {course.assignments?.length || 0}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Assignments
+                    </div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {course.exams?.length || 0}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Exams
+                    </div>
+                  </div>
                 </div>
 
                 {/* Course Duration */}
@@ -186,13 +221,23 @@ export default function EnrollmentModal({
               </div>
 
               <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                  onClick={onEnroll}
-                >
-                  Confirm Enrollment
-                </button>
+                {isEnrolled ? (
+                  <button
+                    type="button"
+                    className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                    onClick={onUnenroll}
+                  >
+                    Unenroll from Course
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    onClick={onEnroll}
+                  >
+                    Enroll in Course
+                  </button>
+                )}
                 <button
                   type="button"
                   className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
