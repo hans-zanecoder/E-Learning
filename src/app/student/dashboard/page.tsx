@@ -821,7 +821,7 @@ export default function StudentDashboard() {
         </div>
 
         {/* Exams List - Redesigned */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -1003,7 +1003,7 @@ export default function StudentDashboard() {
         </div>
 
         {/* Lessons List - Redesigned */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
