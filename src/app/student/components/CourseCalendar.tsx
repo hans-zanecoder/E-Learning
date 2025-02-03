@@ -30,8 +30,8 @@ export default function CourseCalendar({ enrolledCourses, className }: CourseCal
   const events = enrolledCourses.map((course) => ({
     id: course._id,
     title: course.title,
-    start: new Date(course.startDate),
-    end: new Date(course.endDate),
+    start: course.startDate ? new Date(course.startDate) : new Date(),
+    end: course.endDate ? new Date(course.endDate) : new Date(),
     allDay: true,
     resource: course,
   }));
