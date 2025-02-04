@@ -222,7 +222,7 @@ export default function StudentDashboard() {
   
     setUser(userData);
   
-    // Fetch data
+    // Initial fetch
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -242,9 +242,6 @@ export default function StudentDashboard() {
     };
   
     fetchData();
-  
-    const pollInterval = setInterval(fetchEnrolledCourses, 30000);
-    return () => clearInterval(pollInterval);
   }, []);
 
   useEffect(() => {
@@ -1328,6 +1325,9 @@ export default function StudentDashboard() {
     });
 
     useEffect(() => {
+      const hasLoadedKey = 'assignmentsLoaded';
+      const hasLoaded = sessionStorage.getItem(hasLoadedKey);
+
       const fetchAssignments = async () => {
         try {
           const token = localStorage.getItem('token');
@@ -1354,13 +1354,21 @@ export default function StudentDashboard() {
           });
           
           setAssignments(allAssignments);
+          sessionStorage.setItem(hasLoadedKey, 'true');
         } catch (error) {
           console.error('Error fetching assignments:', error);
         }
       };
 
-      fetchAssignments();
-    }, [enrolledCourses, user._id]);
+      if (!hasLoaded) {
+        fetchAssignments();
+      }
+
+      // Cleanup on component unmount
+      return () => {
+        sessionStorage.removeItem(hasLoadedKey);
+      };
+    }, []); // Empty dependency array
 
     const handleAssignmentClick = (assignment: any) => {
       if (!assignment || !assignment._id) {
