@@ -21,6 +21,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
 import EditExamModal from '@/app/components/EditExamModal';
+import SubmissionViewModal from '@/app/components/SubmissionViewModal';
 
 interface ExamSubmission {
   _id: string;
@@ -1104,26 +1105,39 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
   const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null);
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<{[key: string]: any[]}>({});
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
 
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const promises = courses.map(course => 
-          fetch(`/api/courses/${course._id}/assignments`, {
-            headers: {
-              Authorization: `Bearer ${token}`
+        const results = await Promise.allSettled(
+          courses.map(async course => {
+            const response = await fetch(`/api/courses/${course._id}/assignments`, {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch assignments for course ${course._id}`);
             }
-          }).then(res => res.json())
+            
+            return response.json();
+          })
         );
         
-        const courseAssignments = await Promise.all(promises);
-        const allAssignments = courseAssignments.flat().map(assignment => ({
+        const successfulResults = results
+          .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+          .map(result => result.value);
+        
+        const allAssignments = successfulResults.flat().map(assignment => ({
           ...assignment,
           courseName: courses.find(c => c._id === assignment.courseId)?.name,
           enrolledStudents: courses.find(c => c._id === assignment.courseId)?.enrolledStudents || []
         }));
         
+        console.log('Fetched assignments:', allAssignments); // Add this debug log
         setAssignments(allAssignments);
       } catch (error) {
         console.error('Error fetching assignments:', error);
@@ -1132,6 +1146,42 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
 
     fetchAssignments();
   }, [courses]);
+
+  useEffect(() => {
+    if (expandedAssignment) {
+      fetchAssignmentSubmissions(expandedAssignment);
+    }
+  }, [expandedAssignment]);
+
+  const fetchAssignmentSubmissions = async (assignmentId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const courseId = assignments.find(a => a._id === assignmentId)?.courseId;
+      
+      if (!courseId) throw new Error('Course ID not found for assignment');
+      
+      const response = await fetch(`/api/teacher/courses/${courseId}/assignments/${assignmentId}/submissions`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response text:', errorText);
+        throw new Error('Failed to fetch assignment submissions');
+      }
+      
+      const data = await response.json();
+      setAssignmentSubmissions(prev => ({
+        ...prev,
+        [assignmentId]: data.submissions || []
+      }));
+    } catch (error) {
+      console.error('Error fetching assignment submissions:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1207,10 +1257,11 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
                           </div>
                           {submission ? (
                             <a
-                              href={submission.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedSubmission(submission);
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer"
                             >
                               View Submission
                             </a>
@@ -1229,6 +1280,13 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
           </div>
         ))}
       </div>
+
+      {selectedSubmission && (
+        <SubmissionViewModal
+          submission={selectedSubmission}
+          onClose={() => setSelectedSubmission(null)}
+        />
+      )}
     </div>
   );
 };
