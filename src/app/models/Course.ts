@@ -87,5 +87,11 @@ const courseSchema = new Schema<ICourse>(
   }
 );
 
+// Remove any socket.io or real-time related middleware
+courseSchema.post('save', function(doc) {
+  // Only update timestamps
+  doc.updatedAt = new Date();
+});
+
 export { courseSchema };
 export default mongoose.models.Course || mongoose.model<ICourse>('Course', courseSchema);
