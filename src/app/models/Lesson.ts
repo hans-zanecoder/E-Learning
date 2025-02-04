@@ -16,6 +16,9 @@ const lessonSchema = new mongoose.Schema({
   dueDate: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  _id: false,
+  strict: true
 });
 
 const Lesson = mongoose.models.Lesson || mongoose.model('Lesson', lessonSchema);

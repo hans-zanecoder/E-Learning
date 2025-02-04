@@ -3,24 +3,35 @@ import connectDB from '@/app/lib/db';
 import { verifyJWT } from '@/app/lib/jwt';
 import { Course, Teacher, Enrollment } from '@/app/models';
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 // Define Lesson Schema if not already registered
 const LessonSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    default: () => uuidv4(),
+  },
   title: String,
   content: String,
   dueDate: Date,
   studentProgress: [{
-    studentId: mongoose.Schema.Types.ObjectId,
+    studentId: { type: String, ref: 'Student' },
     completed: Boolean
   }],
   createdAt: Date
+}, {
+  _id: false
 });
 
 // Define Exam Schema
 const ExamSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    default: () => uuidv4(),
+  },
   title: String,
   description: String,
-  courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+  courseId: { type: String, ref: 'Course' },
   questions: [{
     question: String,
     options: [String],
@@ -30,6 +41,8 @@ const ExamSchema = new mongoose.Schema({
   dueDate: Date,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  _id: false
 });
 
 // Register models only if they haven't been registered
@@ -61,41 +74,45 @@ export async function GET(request: Request) {
 
     await connectDB();
 
-    // First get the student's enrollments
     const enrollments = await Enrollment.find({
       studentId: decoded.id,
       status: 'active'
     }).lean();
 
-    // Get the course IDs from enrollments
     const courseIds = enrollments.map(enrollment => enrollment.courseId);
 
-    // Find all courses that the student is enrolled in
+    // Find courses using string IDs
     const enrolledCourses = await Course.find({
       _id: { $in: courseIds }
     })
-    .populate('teacherId')
-    .populate('lessons')
-    .populate('exams')
+    .populate({
+      path: 'teacherId',
+      select: 'fullName email username'
+    })
+    .populate({
+      path: 'lessons',
+      model: 'Lesson'
+    })
+    .populate({
+      path: 'exams',
+      model: 'Exam'
+    })
     .lean();
 
-    // Transform the courses data to include completion status
     const coursesWithProgress = enrolledCourses.map(course => ({
       ...course,
       lessons: course.lessons?.map((lesson: LessonType) => ({
         ...lesson,
         completed: lesson.studentProgress?.some(
           progress => 
-            progress.studentId.toString() === decoded.id && 
+            progress.studentId === decoded.id && 
             progress.completed
         ) || false
       })) || [],
-      exams: course.exams || [] // Ensure exams array exists
+      exams: course.exams || []
     }));
 
-    return NextResponse.json({ 
-      courses: coursesWithProgress 
-    });
+    return NextResponse.json({ courses: coursesWithProgress });
 
   } catch (error: any) {
     console.error('Error in enrolled-courses route:', error);

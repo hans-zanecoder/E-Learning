@@ -58,8 +58,8 @@ const courseSchema = new Schema<ICourse>(
     lessons: [
       {
         type: String,
-        ref: 'Lesson',
-      },
+        ref: 'Lesson'
+      }
     ],
     assignments: [
       {
