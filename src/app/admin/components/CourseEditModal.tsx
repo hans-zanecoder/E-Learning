@@ -1,14 +1,8 @@
 'use client';
 
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useState, useEffect } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect, Fragment } from 'react';
 import Swal from 'sweetalert2';
-
-interface Teacher {
-  _id: string;
-  fullName: string;
-}
 
 interface CourseEditModalProps {
   isOpen: boolean;
@@ -23,13 +17,27 @@ export default function CourseEditModal({
   course,
   onUpdate,
 }: CourseEditModalProps) {
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [selectedTeacher, setSelectedTeacher] = useState('');
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: '',
+    startDate: '',
+    endDate: '',
+    teacherId: '',
+  });
+  const [teachers, setTeachers] = useState<Array<{ _id: string; fullName: string }>>([]);
 
   useEffect(() => {
-    fetchTeachers();
-    if (course?.teacherId) {
-      setSelectedTeacher(course.teacherId);
+    if (course) {
+      setFormData({
+        title: course.title || '',
+        description: course.description || '',
+        category: course.category || '',
+        startDate: course.startDate ? new Date(course.startDate).toISOString().split('T')[0] : '',
+        endDate: course.endDate ? new Date(course.endDate).toISOString().split('T')[0] : '',
+        teacherId: course.teacherId?._id || '',
+      });
+      fetchTeachers();
     }
   }, [course]);
 
@@ -46,12 +54,7 @@ export default function CourseEditModal({
       setTeachers(data.teachers);
     } catch (error: any) {
       console.error('Error fetching teachers:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: error.message || 'Failed to load teachers',
-        icon: 'error',
-        confirmButtonText: 'OK',
-      });
+      Swal.fire('Error', error.message, 'error');
     }
   };
 
@@ -60,42 +63,44 @@ export default function CourseEditModal({
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/admin/courses/${course._id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ teacherId: selectedTeacher }),
+        body: JSON.stringify({
+          ...formData,
+          startDate: new Date(formData.startDate).toISOString(),
+          endDate: new Date(formData.endDate).toISOString(),
+        }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message);
+      const responseText = await response.text();
+      let data;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Raw response:', responseText);
+        throw new Error(`Server error: ${responseText.substring(0, 200)}...`);
       }
 
-      await Swal.fire({
-        title: 'Success!',
-        text: 'Course updated successfully',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      if (!response.ok) {
+        throw new Error(data?.error || `Server error: ${response.status}`);
+      }
 
+      await Swal.fire('Success', 'Course updated successfully', 'success');
       onUpdate();
       closeModal();
     } catch (error: any) {
-      Swal.fire({
-        title: 'Error!',
-        text: error.message || 'Failed to update course',
-        icon: 'error',
-        confirmButtonText: 'OK',
-      });
+      console.error('Update error details:', error);
+      Swal.fire('Error', error.message || 'Failed to update course', 'error');
     }
   };
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={closeModal}>
+      <Dialog onClose={closeModal} className="relative z-50">
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -105,53 +110,137 @@ export default function CourseEditModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
+          <div className="fixed inset-0 bg-black/25 backdrop-blur-sm" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
-            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
-              <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white">
-                Edit Course: {course?.title}
-              </Dialog.Title>
+          <div className="flex min-h-full items-center justify-center p-4">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-xl transition-all">
+                <Dialog.Title className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                  Edit Course
+                </Dialog.Title>
 
-              <form onSubmit={handleSubmit} className="mt-4">
-                <div className="mb-4">
-                  <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                    Assign Teacher
-                  </label>
-                  <select
-                    value={selectedTeacher}
-                    onChange={(e) => setSelectedTeacher(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                    required
-                  >
-                    <option value="">Select Teacher</option>
-                    {teachers.map((teacher) => (
-                      <option key={teacher._id} value={teacher._id}>
-                        {teacher.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Course Title
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                        required
+                      />
+                    </div>
 
-                <div className="mt-4 flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    Update Course
-                  </button>
-                </div>
-              </form>
-            </Dialog.Panel>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Description
+                      </label>
+                      <textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        rows={4}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Category
+                        </label>
+                        <select
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                          required
+                        >
+                          <option value="">Select Category</option>
+                          <option value="programming">Programming</option>
+                          <option value="design">Design</option>
+                          <option value="business">Business</option>
+                          <option value="marketing">Marketing</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Assigned Teacher
+                        </label>
+                        <select
+                          value={formData.teacherId}
+                          onChange={(e) => setFormData({ ...formData, teacherId: e.target.value })}
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                          required
+                        >
+                          <option value="">Select Teacher</option>
+                          {teachers.map((teacher) => (
+                            <option key={teacher._id} value={teacher._id}>
+                              {teacher.fullName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Start Date
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.startDate}
+                          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          End Date
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.endDate}
+                          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-8">
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </div>
       </Dialog>
