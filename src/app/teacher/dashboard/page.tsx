@@ -888,14 +888,43 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
   const [editingExam, setEditingExam] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [expandedExam, setExpandedExam] = useState<string | null>(null);
+  const [examResults, setExamResults] = useState<{[key: string]: any[]}>({});
 
-  const allExams = courses.flatMap((course) => 
-    (course.exams || []).map((exam) => ({
+  useEffect(() => {
+    if (expandedExam) {
+      fetchExamResults(expandedExam);
+    }
+  }, [expandedExam]);
+
+  const fetchExamResults = async (examId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/teacher/exams/${examId}/results`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch exam results');
+      const data = await response.json();
+      setExamResults(prev => ({
+        ...prev,
+        [examId]: data.results
+      }));
+    } catch (error) {
+      console.error('Error fetching exam results:', error);
+    }
+  };
+
+  const allExams = courses.flatMap((course) => {
+    const courseExams = (course.exams || []).map((exam) => ({
       ...exam,
       courseName: course.name,
       courseId: course._id,
-    }))
-  );
+      enrolledStudents: course.enrolledStudents || []
+    }));
+    return courseExams;
+  });
 
   const handleUpdateExam = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -939,6 +968,7 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
         {allExams.map((exam) => (
           <div key={exam._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6">
+              {/* Exam Header */}
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-3">
@@ -971,14 +1001,14 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
                 </button>
               </div>
 
-              {/* New Submissions Accordion */}
+              {/* Results Accordion */}
               <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <button
                   onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
                   className="flex items-center justify-between w-full"
                 >
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    Student Submissions ({exam.submissions?.length || 0})
+                    Student Results ({exam.enrolledStudents?.length || 0} students)
                   </span>
                   <ChevronDownIcon
                     className={`w-5 h-5 text-gray-500 transition-transform ${
@@ -989,42 +1019,60 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
 
                 {expandedExam === exam._id && (
                   <div className="mt-4 space-y-3">
-                    {exam.submissions && exam.submissions.length > 0 ? (
-                      exam.submissions.map((submission) => (
-                        <div
-                          key={submission._id}
-                          className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                                <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                                  {submission.studentName.charAt(0)}
-                                </span>
+                    {exam.enrolledStudents && exam.enrolledStudents.length > 0 ? (
+                      exam.enrolledStudents.map((student) => {
+                        const submission = examResults[exam._id]?.find(
+                          (result) => result.studentId === student._id
+                        );
+                        
+                        return (
+                          <div
+                            key={student._id}
+                            className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                    {student.username?.charAt(0) || 'S'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {student.username}
+                                  </h4>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {submission ? (
+                                      `Submitted: ${new Date(submission.submittedAt).toLocaleDateString()}`
+                                    ) : (
+                                      'Not attempted yet'
+                                    )}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {submission.studentName}
-                                </h4>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  Submitted: {new Date(submission.submittedAt).toLocaleDateString()}
-                                </p>
+                              <div className="text-right">
+                                {submission ? (
+                                  <>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                      Score: {submission.score} / {exam.totalScore}
+                                    </span>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      {Math.round((submission.score / exam.totalScore) * 100)}%
+                                    </p>
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    Pending
+                                  </span>
+                                )}
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                Score: {submission.score} / {exam.totalScore}
-                              </span>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {Math.round((submission.score / exam.totalScore) * 100)}%
-                              </p>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                        No submissions yet
+                        No students enrolled in this course
                       </p>
                     )}
                   </div>
