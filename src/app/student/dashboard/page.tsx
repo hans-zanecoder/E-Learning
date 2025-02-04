@@ -28,13 +28,18 @@ import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
 import AssignmentModal from '@/app/components/AssignmentModal';
-import CourseEnrollModal from '../components/CourseEnrollModal';
 import CourseUnenrollModal from '../components/CourseUnenrollModal';
 
 interface CourseDetailsModalProps {
   course: Course;
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface ExamSubmission {
+  studentId: string;
+  score: number;
+  submittedAt: string;
 }
 
 const CourseDetailsModal = ({ course, isOpen, onClose }: CourseDetailsModalProps) => {
@@ -912,7 +917,8 @@ export default function StudentDashboard() {
           exams: course.exams.map(exam => ({
             ...exam,
             courseName: course.title,
-            courseId: course._id
+            courseId: course._id,
+            submissions: exam.submissions || []
           }))
         };
       }
@@ -976,8 +982,11 @@ export default function StudentDashboard() {
                   Completed Exams
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {/* Add completed exams count logic here */}
-                  0
+                  {enrolledCourses.reduce((total, course) => {
+                    return total + (course.exams?.filter(exam => 
+                      exam.submissions?.some(sub => sub.studentId === user._id)
+                    ).length || 0);
+                  }, 0)}
                 </h3>
               </div>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
@@ -1045,42 +1054,62 @@ export default function StudentDashboard() {
                 </div>
 
                 <div className="space-y-3">
-                  {exams.map((exam) => (
-                    <button
-                      key={exam._id}
-                      onClick={() => {
-                        setSelectedExam(exam);
-                        setIsExamModalOpen(true);
-                      }}
-                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
-                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
-                        focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
-                        relative overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center space-x-4 flex-1">
-                          <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                            <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  {exams.map((exam) => {
+                    const userSubmission = exam.submissions?.find(
+                      (sub) => sub.studentId === user._id
+                    );
+                    
+                    return (
+                      <button
+                        key={exam._id}
+                        onClick={() => {
+                          if (!userSubmission) {
+                            setSelectedExam(exam);
+                            setIsExamModalOpen(true);
+                          }
+                        }}
+                        className={`w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                          hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                          focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
+                          relative overflow-hidden ${userSubmission ? 'cursor-default hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''}`}
+                      >
+                        <div className="flex items-center justify-between relative z-10">
+                          <div className="flex items-center space-x-4 flex-1">
+                            <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                              {userSubmission ? (
+                                <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              ) : (
+                                <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                                {exam.title}
+                              </h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {userSubmission ? (
+                                  <span className="text-green-600 dark:text-green-400">
+                                    Score: {userSubmission.score} / {exam.totalScore}
+                                  </span>
+                                ) : (
+                                  `Duration: ${exam.duration} minutes`
+                                )}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
-                              {exam.title}
-                            </h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Duration: {exam.duration} minutes
-                            </p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                              {userSubmission ? 'Completed' : 'Start Exam'}
+                            </span>
+                            {!userSubmission && (
+                              <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                            Start Exam
-                          </span>
-                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  ))}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}

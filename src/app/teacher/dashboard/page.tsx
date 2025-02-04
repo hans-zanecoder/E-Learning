@@ -17,6 +17,7 @@ import {
   PlusIcon,
   ClockIcon,
   PencilIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
 import EditExamModal from '@/app/components/EditExamModal';
@@ -886,6 +887,7 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
 }) => {
   const [editingExam, setEditingExam] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [expandedExam, setExpandedExam] = useState<string | null>(null);
 
   const allExams = courses.flatMap((course) => 
     (course.exams || []).map((exam) => ({
@@ -935,10 +937,7 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
 
       <div className="grid gap-6">
         {allExams.map((exam) => (
-          <div
-            key={exam._id}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
-          >
+          <div key={exam._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -970,6 +969,66 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
                 >
                   <PencilIcon className="h-5 w-5" />
                 </button>
+              </div>
+
+              {/* New Submissions Accordion */}
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <button
+                  onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
+                  className="flex items-center justify-between w-full"
+                >
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Student Submissions ({exam.submissions?.length || 0})
+                  </span>
+                  <ChevronDownIcon
+                    className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedExam === exam._id ? 'transform rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {expandedExam === exam._id && (
+                  <div className="mt-4 space-y-3">
+                    {exam.submissions && exam.submissions.length > 0 ? (
+                      exam.submissions.map((submission) => (
+                        <div
+                          key={submission._id}
+                          className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                  {submission.studentName.charAt(0)}
+                                </span>
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {submission.studentName}
+                                </h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Submitted: {new Date(submission.submittedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                Score: {submission.score} / {exam.totalScore}
+                              </span>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {Math.round((submission.score / exam.totalScore) * 100)}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        No submissions yet
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
