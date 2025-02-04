@@ -35,7 +35,7 @@ export default function Login() {
 
       // Show success message
       await swalSuccess({
-        text: 'Login successful! Redirecting...',
+        text: 'Login successful!',
         timer: 1500,
         showConfirmButton: false,
       });
