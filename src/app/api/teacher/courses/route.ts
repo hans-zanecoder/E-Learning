@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyJWT } from '@/app/lib/jwt';
 import Course from '@/app/models/Course';
+import Lesson from '@/app/models/Lesson';
 import connectDB from '@/app/lib/db';
 
 export async function GET(request: Request) {
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     const courses = await Course.find({ teacherId: decoded.id })
       .populate({
         path: 'lessons',
-        model: 'Lesson',
+        model: Lesson,
         select: 'title content dueDate studentProgress'
       })
       .populate('enrolledStudents', 'username fullName email')
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
       name: course.title,
       description: course.description,
       enrolledStudents: course.enrolledStudents || [],
-      lessons: (course.lessons || []).map(lesson => ({
+      lessons: (course.lessons || []).map((lesson: { _id: string; title: string; content: string; dueDate: Date; studentProgress?: Array<{ studentId: string; completed: boolean }> }) => ({
         ...lesson,
         courseName: course.title
       }))
