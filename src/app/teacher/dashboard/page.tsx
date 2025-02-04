@@ -1103,59 +1103,35 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
 }) => {
   const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null);
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<{[key: string]: any[]}>({});
-  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
-  const [assignmentDetails, setAssignmentDetails] = useState<Record<string, any>>({});
+  const [assignments, setAssignments] = useState<any[]>([]);
 
   useEffect(() => {
-    // Fetch assignment details for each course
-    const fetchAllAssignmentDetails = async () => {
-      const token = localStorage.getItem('token');
-      for (const course of courses) {
-        if (course.assignments && course.assignments.length > 0) {
-          for (const assignmentId of course.assignments) {
-            try {
-              const response = await fetch(`/api/assignments/${assignmentId}`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              });
-              if (response.ok) {
-                const data = await response.json();
-                setAssignmentDetails(prev => ({
-                  ...prev,
-                  [assignmentId.toString()]: data
-                }));
-              }
-            } catch (error) {
-              console.error('Error fetching assignment details:', error);
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const promises = courses.map(course => 
+          fetch(`/api/courses/${course._id}/assignments`, {
+            headers: {
+              Authorization: `Bearer ${token}`
             }
-          }
-        }
+          }).then(res => res.json())
+        );
+        
+        const courseAssignments = await Promise.all(promises);
+        const allAssignments = courseAssignments.flat().map(assignment => ({
+          ...assignment,
+          courseName: courses.find(c => c._id === assignment.courseId)?.name,
+          enrolledStudents: courses.find(c => c._id === assignment.courseId)?.enrolledStudents || []
+        }));
+        
+        setAssignments(allAssignments);
+      } catch (error) {
+        console.error('Error fetching assignments:', error);
       }
     };
 
-    fetchAllAssignmentDetails();
+    fetchAssignments();
   }, [courses]);
-
-  const fetchAssignmentSubmissions = async (assignmentId: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/assignments/${assignmentId}/submissions`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch assignment submissions');
-      const data = await response.json();
-      setAssignmentSubmissions(prev => ({
-        ...prev,
-        [assignmentId]: data.submissions
-      }));
-    } catch (error) {
-      console.error('Error fetching assignment submissions:', error);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -1164,144 +1140,91 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
       </h2>
 
       <div className="grid gap-6">
-        {courses.map((course) => (
-          <div key={course._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        {assignments.map((assignment) => (
+          <div key={assignment._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6">
-              <button
-                onClick={() => setExpandedCourse(expandedCourse === course._id ? null : course._id)}
-                className="w-full flex items-center justify-between"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="flex-shrink-0 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                    <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {course.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {Array.isArray(course.assignments) ? course.assignments.length : 0} Assignments • {course.enrolledStudents?.length || 0} Students
-                    </p>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {assignment.title}
+                      </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Course: {assignment.courseName}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <ChevronDownIcon
-                  className={`w-5 h-5 text-gray-500 transition-transform ${
-                    expandedCourse === course._id ? 'transform rotate-180' : ''
-                  }`}
-                />
-              </button>
+              </div>
 
-              {expandedCourse === course._id && (
-                <div className="mt-6 space-y-4">
-                  {course.assignments && Array.isArray(course.assignments) && course.assignments.length > 0 ? (
-                    course.assignments.map((assignment: any) => {
-                      const assignmentDetails = assignmentSubmissions[assignment._id];
-                      if (!assignmentDetails) return null;
+              <div className="mt-4">
+                <button
+                  onClick={() => setExpandedAssignment(expandedAssignment === assignment._id ? null : assignment._id)}
+                  className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400"
+                >
+                  <span>View Submissions ({assignment.enrolledStudents?.length || 0})</span>
+                  <ChevronDownIcon
+                    className={`w-4 h-4 transition-transform ${
+                      expandedAssignment === assignment._id ? 'transform rotate-180' : ''
+                    }`}
+                  />
+                </button>
 
+                {expandedAssignment === assignment._id && (
+                  <div className="mt-3 space-y-2">
+                    {assignment.enrolledStudents?.map((student: { _id: string; username: string }) => {
+                      const submission = assignmentSubmissions[assignment._id]?.find(
+                        (sub) => sub.studentId === student._id
+                      );
+                      
                       return (
-                        <div key={assignment._id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-3 mb-2">
-                                <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                                  <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                  <h4 className="text-base font-medium text-gray-900 dark:text-white">
-                                    {assignment.title}
-                                  </h4>
-                                  <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                                    <span>Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
-                                    <span>•</span>
-                                    <span>{assignment.totalScore} points</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-300 ml-12">
-                                {assignment.description}
+                        <div
+                          key={student._id}
+                          className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                                {student.username?.charAt(0) || 'S'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {student.username}
+                              </span>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {submission ? (
+                                  `Submitted: ${new Date(submission.submittedAt).toLocaleDateString()}`
+                                ) : (
+                                  'Not submitted'
+                                )}
                               </p>
                             </div>
                           </div>
-
-                          <div className="mt-4 ml-12">
-                            <button
-                              onClick={() => {
-                                setExpandedAssignment(expandedAssignment === assignment._id ? null : assignment._id);
-                                if (!assignmentDetails) {
-                                  fetchAssignmentSubmissions(assignment._id);
-                                }
-                              }}
-                              className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400"
+                          {submission ? (
+                            <a
+                              href={submission.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
                             >
-                              <span>View Submissions ({course.enrolledStudents?.length || 0})</span>
-                              <ChevronDownIcon
-                                className={`w-4 h-4 transition-transform ${
-                                  expandedAssignment === assignment._id ? 'transform rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-
-                            {expandedAssignment === assignment._id && (
-                              <div className="mt-3 space-y-2">
-                                {course.enrolledStudents?.map((student) => {
-                                  const submission = assignmentDetails.find(
-                                    (sub) => sub.studentId === student._id
-                                  );
-                                  
-                                  return (
-                                    <div
-                                      key={student._id}
-                                      className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-lg"
-                                    >
-                                      <div className="flex items-center space-x-3">
-                                        <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                                            {student.username?.charAt(0) || 'S'}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                            {student.username}
-                                          </span>
-                                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            {submission ? (
-                                              `Submitted: ${new Date(submission.submittedAt).toLocaleDateString()}`
-                                            ) : (
-                                              'Not submitted'
-                                            )}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      {submission ? (
-                                        <a
-                                          href={submission.fileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                                        >
-                                          View Submission
-                                        </a>
-                                      ) : (
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                                          Pending
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
+                              View Submission
+                            </a>
+                          ) : (
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              Pending
+                            </span>
+                          )}
                         </div>
                       );
-                    })
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                      No assignments in this course
-                    </p>
-                  )}
-                </div>
-              )}
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
