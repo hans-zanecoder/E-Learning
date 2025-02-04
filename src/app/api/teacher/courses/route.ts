@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyJWT } from '@/app/lib/jwt';
 import Course from '@/app/models/Course';
-import Lesson from '@/app/models/Lesson';
+import  Lesson from '@/app/models/Lesson';
 import connectDB from '@/app/lib/db';
 
 export async function GET(request: Request) {
@@ -26,7 +26,8 @@ export async function GET(request: Request) {
         select: 'title content dueDate studentProgress'
       })
       .populate('enrolledStudents', 'username fullName email')
-      .select('title description enrolledStudents lessons')
+      .populate('exams')
+      .select('title description enrolledStudents lessons exams')
       .lean();
 
     // Map the database fields to match the frontend interface
@@ -35,10 +36,11 @@ export async function GET(request: Request) {
       name: course.title,
       description: course.description,
       enrolledStudents: course.enrolledStudents || [],
-      lessons: (course.lessons || []).map((lesson: { _id: string; title: string; content: string; dueDate: Date; studentProgress?: Array<{ studentId: string; completed: boolean }> }) => ({
+      lessons: (course.lessons || []).map((lesson: Lesson) => ({
         ...lesson,
         courseName: course.title
-      }))
+      })),
+      exams: course.exams || []
     }));
 
     return NextResponse.json({ courses: mappedCourses });

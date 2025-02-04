@@ -19,6 +19,7 @@ import {
   PencilIcon,
 } from '@heroicons/react/24/outline';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
+import EditExamModal from '@/app/components/EditExamModal';
 
 interface ExamSubmission {
   _id: string;
@@ -878,15 +879,53 @@ const ManageLessons = ({ courses, fetchTeacherCourses, user }: {
   );
 };
 
-const ExamsList = ({ courses }: { courses: Course[] }) => {
+const ManageExams = ({ courses, fetchTeacherCourses, user }: { 
+  courses: Course[],
+  fetchTeacherCourses: (teacherId: string, token: string) => Promise<void>,
+  user: any
+}) => {
+  const [editingExam, setEditingExam] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const allExams = courses.flatMap((course) => 
     (course.exams || []).map((exam) => ({
       ...exam,
       courseName: course.name,
       courseId: course._id,
-      uniqueKey: `${course._id}-${exam._id}`
     }))
   );
+
+  const handleUpdateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/teacher/courses/${editingExam.courseId}/exams/${editingExam._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editingExam.title,
+          description: editingExam.description,
+          questions: editingExam.questions,
+          totalScore: editingExam.totalScore,
+          dueDate: editingExam.dueDate
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update exam');
+      }
+
+      await swalSuccess({ text: 'Exam updated successfully' });
+      setIsEditModalOpen(false);
+      fetchTeacherCourses(user._id, token!);
+    } catch (error: any) {
+      console.error('Error updating exam:', error);
+      swalError(error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -897,7 +936,7 @@ const ExamsList = ({ courses }: { courses: Course[] }) => {
       <div className="grid gap-6">
         {allExams.map((exam) => (
           <div
-            key={exam.uniqueKey}
+            key={exam._id}
             className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
           >
             <div className="p-6">
@@ -905,7 +944,7 @@ const ExamsList = ({ courses }: { courses: Course[] }) => {
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="flex-shrink-0 p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
-                      <AcademicCapIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                      <ClipboardDocumentCheckIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -922,57 +961,30 @@ const ExamsList = ({ courses }: { courses: Course[] }) => {
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Student Results Section */}
-              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-                  Student Results
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Student Name
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Score
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Submission Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {exam.submissions?.map((submission: any) => (
-                        <tr key={submission._id}>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {submission.studentName}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {submission.score}/{exam.totalScore}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {new Date(submission.submittedAt).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                      {(!exam.submissions || exam.submissions.length === 0) && (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                            No submissions yet
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <button
+                  onClick={() => {
+                    setEditingExam(exam);
+                    setIsEditModalOpen(true);
+                  }}
+                  className="ml-4 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                >
+                  <PencilIcon className="h-5 w-5" />
+                </button>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Edit Exam Modal */}
+      {isEditModalOpen && editingExam && (
+        <EditExamModal
+          exam={editingExam}
+          onClose={() => setIsEditModalOpen(false)}
+          onSubmit={handleUpdateExam}
+          setEditingExam={setEditingExam}
+        />
+      )}
     </div>
   );
 };
@@ -1192,7 +1204,7 @@ export default function TeacherDashboard() {
       case 'lessons':
         return <ManageLessons courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
       case 'exams':
-        return <ExamsList courses={courses} />;
+        return <ManageExams courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
       default:
         return <DashboardStats />;
     }
