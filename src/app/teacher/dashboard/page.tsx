@@ -23,6 +23,19 @@ import {
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
 import EditExamModal from '@/app/components/EditExamModal';
 import SubmissionViewModal from '@/app/components/SubmissionViewModal';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend
+} from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 interface ExamSubmission {
   _id: string;
@@ -79,11 +92,18 @@ interface Student {
   email: string;
 }
 
+interface EnrolledStudent {
+  _id: string;
+  username: string;
+  fullName?: string;
+  enrolledAt?: string;
+}
+
 interface Course {
   _id: string;
   name: string;
   description: string;
-  enrolledStudents: Student[];
+  enrolledStudents: EnrolledStudent[];
   lessons: Lesson[];
   exams: Exam[];
   assignments: Assignment[];
@@ -398,7 +418,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {student?.email || 'No email provided'}
+                              {student?.username || 'No email provided'}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -613,6 +633,8 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
 };
 
 const TeacherStats = ({ courses }: { courses: Course[] }) => {
+  const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
+
   const totalStudents = courses.reduce((acc, course) => 
     acc + (course.enrolledStudents?.length || 0), 0
   );
@@ -626,53 +648,150 @@ const TeacherStats = ({ courses }: { courses: Course[] }) => {
   );
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-            <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+            </div>
           </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-            <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <StudentGrowthChart courses={courses} />
+        
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
+            My Assigned Courses
+          </h3>
+          <div className="space-y-4">
+            {courses.map((course) => (
+              <div 
+                key={course._id}
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                      {course.name}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {course.enrolledStudents?.length || 0} students
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                  Active
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-            <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
-          </div>
-        </div>
-      </div>
+const StudentGrowthChart = ({ courses }: { courses: Course[] }) => {
+  const pieChartData = {
+    labels: courses.map(course => course.name),
+    datasets: [{
+      data: courses.map(course => course.enrolledStudents?.length || 0),
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.8)',   // blue
+        'rgba(16, 185, 129, 0.8)',   // green
+        'rgba(249, 115, 22, 0.8)',   // orange
+        'rgba(139, 92, 246, 0.8)',   // purple
+        'rgba(236, 72, 153, 0.8)',   // pink
+        'rgba(245, 158, 11, 0.8)',   // amber
+      ],
+      borderColor: 'rgba(255, 255, 255, 0.8)',
+      borderWidth: 2
+    }]
+  };
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-            <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
-          </div>
-        </div>
+  const pieChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          padding: 20,
+          usePointStyle: true,
+          pointStyle: 'circle'
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const label = context.label || '';
+            const value = context.raw || 0;
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value} students (${percentage}%)`;
+          }
+        }
+      }
+    },
+    cutout: '35%',
+    animation: {
+      animateScale: true,
+      animateRotate: true
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
+        Students per Course
+      </h3>
+      <div className="h-[400px] flex items-center justify-center">
+        <Pie data={pieChartData} options={pieChartOptions} />
       </div>
     </div>
   );
@@ -766,11 +885,6 @@ const ManageLessons = ({ courses, fetchTeacherCourses, user }: {
                         Course: {lesson.courseName}
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-4 prose prose-sm dark:prose-invert max-w-none">
-                    <p className="text-gray-600 dark:text-gray-300">
-                      {lesson.content || 'No content available'}
-                    </p>
                   </div>
                 </div>
                 <button
@@ -1416,36 +1530,11 @@ export default function TeacherDashboard() {
   const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
 
   const navigation = [
-    {
-      name: 'Dashboard',
-      icon: ChartPieIcon,
-      view: 'dashboard',
-    },
-    {
-      name: 'My Courses',
-      icon: BookOpenIcon,
-      view: 'courses',
-    },
-    {
-      name: 'Manage Lessons',
-      icon: BookmarkIcon,
-      view: 'lessons',
-    },
-    {
-      name: 'Manage Exams',
-      icon: AcademicCapIcon,
-      view: 'exams',
-    },
-    {
-      name: 'Manage Assignments',
-      icon: ClipboardDocumentCheckIcon,
-      view: 'assignments',
-    },
-    {
-      name: 'Students',
-      icon: UsersIcon,
-      view: 'students',
-    },
+    { name: 'Dashboard', view: 'dashboard', icon: ChartPieIcon },
+    { name: 'Lessons', view: 'lessons', icon: BookmarkIcon },
+    { name: 'Exams', view: 'exams', icon: ClipboardDocumentCheckIcon },
+    { name: 'Assignments', view: 'assignments', icon: BookmarkIcon },
+    { name: 'Students', view: 'students', icon: UsersIcon }
   ];
 
   useEffect(() => {
@@ -1537,84 +1626,15 @@ export default function TeacherDashboard() {
     }
   };
 
-  const DashboardStats = () => {
-    const totalStudents = courses.reduce(
-      (total, course) => total + (course.enrolledStudents?.length || 0),
-      0
-    );
-
-    return (
-      <div className="space-y-6">
-        <TeacherStats courses={courses} />
-
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          My Assigned Courses
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
-            <div
-              key={course._id}
-              className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
-                      {course.name}
-                    </h3>
-                  </div>
-                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                    Active
-                  </span>
-                </div>
-
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description}
-                </p>
-
-                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      <UsersIcon className="h-4 w-4 inline mr-1" />
-                      {course.enrolledStudents?.length || 0} students
-                    </div>
-                    <button
-                      onClick={() => setSelectedCourseModal(course)}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-                    >
-                      View Details →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {selectedCourseModal && (
-          <CourseDetailsModal
-            course={selectedCourseModal}
-            isOpen={!!selectedCourseModal}
-            onClose={() => setSelectedCourseModal(null)}
-            onUpdate={() => fetchTeacherCourses(user._id, localStorage.getItem('token')!)}
-          />
-        )}
-      </div>
-    );
-  };
-
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <DashboardStats />;
+        return <TeacherStats courses={courses} />;
       case 'courses':
         return selectedCourse ? (
           <CourseDetailsModal course={selectedCourse} isOpen={isAddLessonModalOpen} onClose={() => setIsAddLessonModalOpen(false)} onUpdate={() => fetchTeacherCourses(user._id, localStorage.getItem('token')!)} />
         ) : (
-          <DashboardStats />
+          <TeacherStats courses={courses} />
         );
       case 'lessons':
         return <ManageLessons courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
@@ -1625,7 +1645,7 @@ export default function TeacherDashboard() {
       case 'students':
         return <ManageStudents courses={courses} />;
       default:
-        return <DashboardStats />;
+        return <TeacherStats courses={courses} />;
     }
   };
 

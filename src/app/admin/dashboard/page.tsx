@@ -38,11 +38,6 @@ const navigation = [
     view: 'users',
   },
   {
-    name: 'Courses',
-    icon: BookOpenIcon,
-    view: 'courses',
-  },
-  {
     name: 'Add Course',
     icon: PlusIcon,
     href: '/admin/courses/add',
