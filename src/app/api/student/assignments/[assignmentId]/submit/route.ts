@@ -19,7 +19,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    const { fileUrl, submissionText } = await request.json();
+    const { fileUrl, submissionText, submissionType } = await request.json();
 
     const assignment = await Assignment.findByIdAndUpdate(
       params.assignmentId,
@@ -29,12 +29,17 @@ export async function POST(
             studentId: decoded.id,
             fileUrl,
             submissionText,
+            submissionType,
             submittedAt: new Date()
           }
         }
       },
       { new: true }
     );
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ message: 'Assignment submitted successfully', assignment });
   } catch (error: any) {

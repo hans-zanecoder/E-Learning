@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Dialog } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 
 export default function AssignmentSubmissionModal({ 
   assignment, 
-  onClose, 
-  onSubmit 
+  onClose,
+  user 
 }: { 
   assignment: any;
   onClose: () => void;
-  onSubmit: (data: { fileUrl?: string; submissionText?: string }) => Promise<void>;
+  user: any;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [submissionText, setSubmissionText] = useState('');
@@ -18,13 +18,27 @@ export default function AssignmentSubmissionModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
     try {
-      let fileUrl;
+      const formData = new FormData();
       if (file) {
-        // Implement file upload logic here
-        // fileUrl = await uploadFile(file);
+        formData.append('file', file);
       }
-      await onSubmit({ fileUrl, submissionText });
+      formData.append('submissionText', submissionText);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/student/assignments/${assignment._id}/submit`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit assignment');
+      }
+
       onClose();
     } catch (error) {
       console.error('Error submitting assignment:', error);
@@ -49,29 +63,49 @@ export default function AssignmentSubmissionModal({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {assignment.fileRequired && (
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Upload File
                   </label>
-                  <input
-                    type="file"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="w-full"
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg">
+                    <div className="space-y-1 text-center">
+                      <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="flex text-sm text-gray-600 dark:text-gray-400">
+                        <label className="relative cursor-pointer rounded-md font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-purple-500">
+                          <span>Upload a file</span>
+                          <input
+                            type="file"
+                            className="sr-only"
+                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        PDF, DOC, DOCX, or images up to 10MB
+                      </p>
+                    </div>
+                  </div>
+                  {file && (
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Selected file: {file.name}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Submission Text
+                  </label>
+                  <textarea
+                    value={submissionText}
+                    onChange={(e) => setSubmissionText(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter your submission text here..."
                   />
                 </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Submission Text
-                </label>
-                <textarea
-                  value={submissionText}
-                  onChange={(e) => setSubmissionText(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 p-3"
-                />
               </div>
 
               <div className="flex justify-end space-x-4">

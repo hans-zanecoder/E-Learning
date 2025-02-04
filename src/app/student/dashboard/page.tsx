@@ -1040,7 +1040,7 @@ export default function StudentDashboard() {
 
           <div className="space-y-8">
             {Object.entries(examsByCourse).map(([courseId, { courseName, exams }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
@@ -1063,7 +1063,7 @@ export default function StudentDashboard() {
                     
                     return (
                       <button
-                        key={exam._id}
+                        key={`assignment-${exam._id}`}
                         onClick={() => handleExamClick(exam)}
                         className={`w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
                           hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
@@ -1242,7 +1242,7 @@ export default function StudentDashboard() {
           
           <div className="space-y-8">
             {Object.entries(lessonsByCourse).map(([courseId, { courseName, lessons }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
@@ -1260,7 +1260,7 @@ export default function StudentDashboard() {
                 <div className="space-y-3">
                   {lessons.map((lesson) => (
                     <button
-                      key={lesson._id}
+                      key={`assignment-${lesson._id}`}
                       onClick={() => {
                         setSelectedLesson(lesson);
                         setIsLessonModalOpen(true);
@@ -1344,7 +1344,7 @@ export default function StudentDashboard() {
           
           <div className="space-y-8">
             {Object.entries(assignmentsByCourse).map(([courseId, { courseName, assignments }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
@@ -1362,7 +1362,7 @@ export default function StudentDashboard() {
                 <div className="space-y-3">
                   {assignments.map((assignment) => (
                     <button
-                      key={assignment._id}
+                      key={`assignment-${assignment._id}`}
                       onClick={() => {
                         setSelectedAssignment(assignment);
                         setIsAssignmentModalOpen(true);
