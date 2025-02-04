@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import {
   Bars3Icon,
@@ -36,10 +37,15 @@ interface Exam {
   title: string;
   description: string;
   courseId: string;
+  courseName?: string;
+  questions: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  }[];
   totalScore: number;
-  submissions?: ExamSubmission[];
-  createdAt: string;
-  updatedAt: string;
+  dueDate: string;
+  enrolledStudents?: any[];
 }
 
 interface Assignment {
@@ -255,19 +261,20 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
   };
 
   const handleQuestionChange = (index: number, field: string, value: any) => {
-    const updatedQuestions = newExam.questions.map((q, i) => {
-      if (i === index) {
-        if (field === 'options') {
-          const optionIndex = parseInt(value.target.dataset.optionindex);
-          const newOptions = [...q.options];
-          newOptions[optionIndex] = value.target.value;
-          return { ...q, options: newOptions };
-        }
-        return { ...q, [field]: value.target.value };
-      }
-      return q;
-    });
-
+    const updatedQuestions = [...newExam.questions];
+    if (field === 'options') {
+      const optionIndex = value.target.dataset.optionindex;
+      const newOptions = [...updatedQuestions[index].options];
+      newOptions[optionIndex] = value.target.value;
+      updatedQuestions[index] = { ...updatedQuestions[index], options: newOptions };
+    } else if (field === 'correctAnswer') {
+      updatedQuestions[index] = { ...updatedQuestions[index], correctAnswer: value };
+    } else {
+      updatedQuestions[index] = { 
+        ...updatedQuestions[index], 
+        [field]: value.target.value 
+      };
+    }
     setNewExam({
       ...newExam,
       questions: updatedQuestions
@@ -523,7 +530,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                                 type="radio"
                                 name={`correct-${questionIndex}`}
                                 checked={question.correctAnswer === optionIndex}
-                                onChange={() => handleQuestionChange(questionIndex, 'correctAnswer', optionIndex)}
+                                onChange={(e) => handleQuestionChange(questionIndex, 'correctAnswer', optionIndex)}
                                 className="w-4 h-4 text-blue-600"
                               />
                               <input
@@ -918,13 +925,20 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
   };
 
   const allExams = courses.flatMap((course) => {
-    const courseExams = (course.exams || []).map((exam) => ({
-      ...exam,
-      courseName: course.name,
-      courseId: course._id,
-      enrolledStudents: course.enrolledStudents || []
-    }));
-    return courseExams;
+    return (course.exams || []).map((exam) => {
+      console.log('Processing exam:', exam); // Debug log
+      return {
+        ...exam,
+        courseName: course.name,
+        courseId: course._id,
+        enrolledStudents: course.enrolledStudents || [],
+        questions: exam.questions ? exam.questions.map(q => ({
+          question: q.question || '',
+          options: Array.isArray(q.options) ? q.options : ['', '', '', ''],
+          correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0
+        })) : []
+      };
+    });
   });
 
   const handleUpdateExam = async (e: React.FormEvent) => {
@@ -993,7 +1007,21 @@ const ManageExams = ({ courses, fetchTeacherCourses, user }: {
                 </div>
                 <button
                   onClick={() => {
-                    setEditingExam(exam);
+                    const examWithQuestions = {
+                      ...exam,
+                      _id: exam._id,
+                      title: exam.title,
+                      description: exam.description,
+                      totalScore: exam.totalScore,
+                      questions: exam.questions ? exam.questions.map(q => ({
+                        question: q.question,
+                        options: q.options || ['', '', '', ''],
+                        correctAnswer: q.correctAnswer
+                      })) : [],
+                      dueDate: exam.dueDate ? new Date(exam.dueDate).toISOString().split('T')[0] : ''
+                    };
+                    console.log('Setting exam with questions:', examWithQuestions);
+                    setEditingExam(examWithQuestions);
                     setIsEditModalOpen(true);
                   }}
                   className="ml-4 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
@@ -1291,6 +1319,91 @@ const ManageAssignments = ({ courses, fetchTeacherCourses, user }: {
   );
 };
 
+const ManageStudents = ({ courses }: { courses: Course[] }) => {
+  // Get all unique students across all courses
+  const allStudents = useMemo(() => {
+    const studentsMap = new Map();
+    
+    courses.forEach(course => {
+      course.enrolledStudents?.forEach(student => {
+        if (!studentsMap.has(student._id)) {
+          studentsMap.set(student._id, {
+            ...student,
+            courses: [course.name]
+          });
+        } else {
+          studentsMap.get(student._id).courses.push(course.name);
+        }
+      });
+    });
+    
+    return Array.from(studentsMap.values());
+  }, [courses]);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+        Manage Students
+      </h2>
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Student
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Email
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Enrolled Courses
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+            {allStudents.map((student) => (
+              <tr key={student._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {student?.fullName?.charAt(0) || student?.username?.charAt(0) || 'S'}
+                      </span>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {student?.fullName || student?.username}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {student.email}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-wrap gap-2">
+                    {student.courses.map((courseName: string, index: number) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                      >
+                        {courseName}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export default function TeacherDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -1509,6 +1622,8 @@ export default function TeacherDashboard() {
         return <ManageExams courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
       case 'assignments':
         return <ManageAssignments courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
+      case 'students':
+        return <ManageStudents courses={courses} />;
       default:
         return <DashboardStats />;
     }

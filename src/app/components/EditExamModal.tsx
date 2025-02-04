@@ -8,13 +8,22 @@ interface Question {
 }
 
 interface EditExamModalProps {
-  exam: any;
+  exam: {
+    _id: string;
+    title: string;
+    description: string;
+    questions: Question[];
+    dueDate: string;
+    totalScore: number;
+  };
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   setEditingExam: (exam: any) => void;
 }
 
 const EditExamModal = ({ exam, onClose, onSubmit, setEditingExam }: EditExamModalProps) => {
+  console.log('Exam data in modal:', exam);
+
   const addQuestion = () => {
     setEditingExam({
       ...exam,
@@ -34,11 +43,26 @@ const EditExamModal = ({ exam, onClose, onSubmit, setEditingExam }: EditExamModa
 
   const updateQuestion = (index: number, field: string, value: any) => {
     const updatedQuestions = [...(exam.questions || [])];
-    updatedQuestions[index] = { 
-      ...updatedQuestions[index], 
-      [field]: value 
-    };
-    setEditingExam({ ...exam, questions: updatedQuestions });
+    if (field === 'options') {
+      updatedQuestions[index] = { 
+        ...updatedQuestions[index], 
+        options: value 
+      };
+    } else if (field === 'correctAnswer') {
+      updatedQuestions[index] = { 
+        ...updatedQuestions[index], 
+        correctAnswer: value 
+      };
+    } else {
+      updatedQuestions[index] = { 
+        ...updatedQuestions[index], 
+        [field]: value 
+      };
+    }
+    setEditingExam({
+      ...exam,
+      questions: updatedQuestions
+    });
   };
 
   return (
@@ -76,6 +100,20 @@ const EditExamModal = ({ exam, onClose, onSubmit, setEditingExam }: EditExamModa
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">
+                  Total Score
+                </label>
+                <input
+                  type="number"
+                  value={exam.totalScore}
+                  onChange={(e) => setEditingExam({ ...exam, totalScore: parseInt(e.target.value) })}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                  min="0"
+                />
+              </div>
+
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">Questions</h3>
@@ -89,57 +127,75 @@ const EditExamModal = ({ exam, onClose, onSubmit, setEditingExam }: EditExamModa
                   </button>
                 </div>
 
-                {(exam.questions || []).map((question: Question, index: number) => (
-                  <div key={index} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium text-gray-900 dark:text-white">
-                        Question {index + 1}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => removeQuestion(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <TrashIcon className="w-5 h-5" />
-                      </button>
-                    </div>
+                {Array.isArray(exam.questions) && exam.questions.length > 0 ? (
+                  exam.questions.map((question, qIndex) => (
+                    <div key={qIndex} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900 dark:text-white">
+                          Question {qIndex + 1}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => removeQuestion(qIndex)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      </div>
 
-                    <input
-                      type="text"
-                      value={question.question}
-                      onChange={(e) => updateQuestion(index, 'question', e.target.value)}
-                      placeholder="Enter question"
-                      className="w-full p-2 border rounded-lg dark:bg-gray-700"
-                      required
-                    />
-
-                    <div className="space-y-2">
-                      {question.options.map((option: string, optionIndex: number) => (
-                        <div key={optionIndex} className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            name={`correct-${index}`}
-                            checked={question.correctAnswer === optionIndex}
-                            onChange={() => updateQuestion(index, 'correctAnswer', optionIndex)}
-                            className="text-blue-600"
-                          />
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Question Text
+                          </label>
                           <input
                             type="text"
-                            value={option}
-                            onChange={(e) => {
-                              const newOptions = [...question.options];
-                              newOptions[optionIndex] = e.target.value;
-                              updateQuestion(index, 'options', newOptions);
-                            }}
-                            placeholder={`Option ${optionIndex + 1}`}
-                            className="w-full p-2 border rounded-lg dark:bg-gray-700"
+                            value={question.question || ''}
+                            onChange={(e) => updateQuestion(qIndex, 'question', e.target.value)}
+                            className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-white"
                             required
                           />
                         </div>
-                      ))}
+
+                        <div className="space-y-3">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Options
+                          </label>
+                          {(question.options || ['', '', '', '']).map((option, oIndex) => (
+                            <div key={oIndex} className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                name={`correct-${qIndex}`}
+                                checked={question.correctAnswer === oIndex}
+                                onChange={() => updateQuestion(qIndex, 'correctAnswer', oIndex)}
+                                className="text-blue-600"
+                              />
+                              <input
+                                type="text"
+                                value={option}
+                                onChange={(e) => {
+                                  const newOptions = [...(question.options || ['', '', '', ''])];
+                                  newOptions[oIndex] = e.target.value;
+                                  updateQuestion(qIndex, 'options', newOptions);
+                                }}
+                                className={`w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-white ${
+                                  question.correctAnswer === oIndex 
+                                  ? 'border-green-500 dark:border-green-500' 
+                                  : ''
+                                }`}
+                                required
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    No questions added yet. Click "Add Question" to begin.
                   </div>
-                ))}
+                )}
               </div>
 
               <div>
