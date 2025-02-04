@@ -10,6 +10,10 @@ export async function POST(
 ) {
   try {
     const { score } = await request.json();
+    if (typeof score !== 'number') {
+      return NextResponse.json({ error: 'Invalid score' }, { status: 400 });
+    }
+
     const token = request.headers.get('authorization')?.split(' ')[1];
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -22,15 +26,14 @@ export async function POST(
 
     await connectDB();
     
-    // Save the exam result
-    await ExamResult.create({
+    const result = await ExamResult.create({
       examId: params.examId,
       studentId: decoded.id,
       score,
       submittedAt: new Date(),
     });
 
-    return NextResponse.json({ message: 'Exam submitted successfully' });
+    return NextResponse.json({ message: 'Exam submitted successfully', score });
   } catch (error: any) {
     console.error('Error submitting exam:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

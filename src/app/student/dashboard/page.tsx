@@ -925,33 +925,35 @@ export default function StudentDashboard() {
       return acc;
     }, {} as Record<string, { courseName: string; exams: any[] }>);
 
+    const handleExamClick = (exam: any) => {
+      const userSubmission = exam.submissions?.find(
+        (sub: any) => sub.studentId === user._id
+      );
+      
+      setSelectedExam(exam);
+      setIsExamModalOpen(true);
+    };
+
     const handleExamSubmit = async (score: number) => {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
         const response = await fetch(`/api/student/exams/${selectedExam._id}/submit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ score }),
         });
 
         const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to submit exam');
-        }
+        if (!response.ok) throw new Error(data.error);
 
-        await swalSuccess({ text: 'Exam submitted successfully!' });
-        fetchEnrolledCourses();
+        await fetchEnrolledCourses();
+        return { score }; 
       } catch (error: any) {
         console.error('Error submitting exam:', error);
-        swalError(error);
+        throw error;
       }
     };
 
@@ -1062,12 +1064,7 @@ export default function StudentDashboard() {
                     return (
                       <button
                         key={exam._id}
-                        onClick={() => {
-                          if (!userSubmission) {
-                            setSelectedExam(exam);
-                            setIsExamModalOpen(true);
-                          }
-                        }}
+                        onClick={() => handleExamClick(exam)}
                         className={`w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
                           hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
                           focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
@@ -1121,6 +1118,11 @@ export default function StudentDashboard() {
             exam={selectedExam}
             onSubmit={handleExamSubmit}
             onClose={() => setIsExamModalOpen(false)}
+            existingSubmission={
+              selectedExam.submissions?.find(
+                (sub: any) => sub.studentId === user._id
+              )
+            }
           />
         )}
       </div>
