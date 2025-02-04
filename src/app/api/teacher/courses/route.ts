@@ -19,6 +19,11 @@ export async function GET(request: Request) {
 
     // Find courses where teacherId matches the logged-in teacher's ID
     const courses = await Course.find({ teacherId: decoded.id })
+      .populate({
+        path: 'lessons',
+        model: 'Lesson',
+        select: 'title content dueDate studentProgress'
+      })
       .populate('enrolledStudents', 'username fullName email')
       .select('title description enrolledStudents lessons')
       .lean();
@@ -29,7 +34,10 @@ export async function GET(request: Request) {
       name: course.title,
       description: course.description,
       enrolledStudents: course.enrolledStudents || [],
-      lessons: course.lessons || []
+      lessons: (course.lessons || []).map(lesson => ({
+        ...lesson,
+        courseName: course.title
+      }))
     }));
 
     return NextResponse.json({ courses: mappedCourses });

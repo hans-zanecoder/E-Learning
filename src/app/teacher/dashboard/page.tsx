@@ -119,27 +119,45 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/teacher/courses/${course._id}/lessons`, {
+      
+      // Basic validation before formatting
+      if (!newLesson.title.trim() || !newLesson.content.trim() || !newLesson.dueDate) {
+        throw new Error('Please fill in all required fields');
+      }
+      
+      const lessonData = {
+        title: newLesson.title.trim(),
+        content: newLesson.content.trim(),
+        dueDate: new Date(newLesson.dueDate).toISOString(),
+        teacherId: course.teacherId,
+        courseId: course._id
+      };
+
+      const response = await fetch(`/api/teacher/courses/${lessonData.courseId}/lessons`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newLesson),
+        body: JSON.stringify(lessonData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to add lesson');
+      const responseText = await response.text();
+      let data;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Raw response:', responseText);
+        throw new Error(`Server error: ${responseText.substring(0, 200)}...`);
       }
-      
-      const data = await response.json();
-      console.log('Lesson added:', data);
-      
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add lesson');
+      }
+
       await swalSuccess({ text: 'Lesson added successfully' });
       setNewLesson({ title: '', content: '', dueDate: '' });
-      
-      // Call onUpdate to refresh the course data
       onUpdate();
     } catch (error: any) {
       console.error('Error adding lesson:', error);
@@ -403,12 +421,11 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                     value={newLesson.content}
                     onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
                     className="w-full p-2 border rounded-lg dark:bg-gray-700"
-                    rows={4}
+                    rows={6}
                     required
                   />
                   <input
                     type="date"
-                    placeholder="Due Date"
                     value={newLesson.dueDate}
                     onChange={(e) => setNewLesson({ ...newLesson, dueDate: e.target.value })}
                     className="w-full p-2 border rounded-lg dark:bg-gray-700"
@@ -416,7 +433,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
                   >
                     Add Lesson
                   </button>
