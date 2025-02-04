@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import {
   Bars3Icon,
@@ -17,8 +18,24 @@ import {
   PlusIcon,
   ClockIcon,
   PencilIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import { swalSuccess, swalError, swalConfirm } from '@/app/utils/swalUtils';
+import EditExamModal from '@/app/components/EditExamModal';
+import SubmissionViewModal from '@/app/components/SubmissionViewModal';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend
+} from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 interface ExamSubmission {
   _id: string;
@@ -33,10 +50,15 @@ interface Exam {
   title: string;
   description: string;
   courseId: string;
+  courseName?: string;
+  questions: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  }[];
   totalScore: number;
-  submissions?: ExamSubmission[];
-  createdAt: string;
-  updatedAt: string;
+  dueDate: string;
+  enrolledStudents?: any[];
 }
 
 interface Assignment {
@@ -70,11 +92,18 @@ interface Student {
   email: string;
 }
 
+interface EnrolledStudent {
+  _id: string;
+  username: string;
+  fullName?: string;
+  enrolledAt?: string;
+}
+
 interface Course {
   _id: string;
   name: string;
   description: string;
-  enrolledStudents: Student[];
+  enrolledStudents: EnrolledStudent[];
   lessons: Lesson[];
   exams: Exam[];
   assignments: Assignment[];
@@ -119,27 +148,45 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/teacher/courses/${course._id}/lessons`, {
+      
+      // Basic validation before formatting
+      if (!newLesson.title.trim() || !newLesson.content.trim() || !newLesson.dueDate) {
+        throw new Error('Please fill in all required fields');
+      }
+      
+      const lessonData = {
+        title: newLesson.title.trim(),
+        content: newLesson.content.trim(),
+        dueDate: new Date(newLesson.dueDate).toISOString(),
+        teacherId: course.teacherId,
+        courseId: course._id
+      };
+
+      const response = await fetch(`/api/teacher/courses/${lessonData.courseId}/lessons`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newLesson),
+        body: JSON.stringify(lessonData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to add lesson');
+      const responseText = await response.text();
+      let data;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Raw response:', responseText);
+        throw new Error(`Server error: ${responseText.substring(0, 200)}...`);
       }
-      
-      const data = await response.json();
-      console.log('Lesson added:', data);
-      
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add lesson');
+      }
+
       await swalSuccess({ text: 'Lesson added successfully' });
       setNewLesson({ title: '', content: '', dueDate: '' });
-      
-      // Call onUpdate to refresh the course data
       onUpdate();
     } catch (error: any) {
       console.error('Error adding lesson:', error);
@@ -234,19 +281,20 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
   };
 
   const handleQuestionChange = (index: number, field: string, value: any) => {
-    const updatedQuestions = newExam.questions.map((q, i) => {
-      if (i === index) {
-        if (field === 'options') {
-          const optionIndex = parseInt(value.target.dataset.optionindex);
-          const newOptions = [...q.options];
-          newOptions[optionIndex] = value.target.value;
-          return { ...q, options: newOptions };
-        }
-        return { ...q, [field]: value.target.value };
-      }
-      return q;
-    });
-
+    const updatedQuestions = [...newExam.questions];
+    if (field === 'options') {
+      const optionIndex = value.target.dataset.optionindex;
+      const newOptions = [...updatedQuestions[index].options];
+      newOptions[optionIndex] = value.target.value;
+      updatedQuestions[index] = { ...updatedQuestions[index], options: newOptions };
+    } else if (field === 'correctAnswer') {
+      updatedQuestions[index] = { ...updatedQuestions[index], correctAnswer: value };
+    } else {
+      updatedQuestions[index] = { 
+        ...updatedQuestions[index], 
+        [field]: value.target.value 
+      };
+    }
     setNewExam({
       ...newExam,
       questions: updatedQuestions
@@ -370,7 +418,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {student?.email || 'No email provided'}
+                              {student?.username || 'No email provided'}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -403,12 +451,11 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                     value={newLesson.content}
                     onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
                     className="w-full p-2 border rounded-lg dark:bg-gray-700"
-                    rows={4}
+                    rows={6}
                     required
                   />
                   <input
                     type="date"
-                    placeholder="Due Date"
                     value={newLesson.dueDate}
                     onChange={(e) => setNewLesson({ ...newLesson, dueDate: e.target.value })}
                     className="w-full p-2 border rounded-lg dark:bg-gray-700"
@@ -416,7 +463,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
                   >
                     Add Lesson
                   </button>
@@ -503,7 +550,7 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
                                 type="radio"
                                 name={`correct-${questionIndex}`}
                                 checked={question.correctAnswer === optionIndex}
-                                onChange={() => handleQuestionChange(questionIndex, 'correctAnswer', optionIndex)}
+                                onChange={(e) => handleQuestionChange(questionIndex, 'correctAnswer', optionIndex)}
                                 className="w-4 h-4 text-blue-600"
                               />
                               <input
@@ -586,6 +633,8 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
 };
 
 const TeacherStats = ({ courses }: { courses: Course[] }) => {
+  const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
+
   const totalStudents = courses.reduce((acc, course) => 
     acc + (course.enrolledStudents?.length || 0), 0
   );
@@ -599,53 +648,150 @@ const TeacherStats = ({ courses }: { courses: Course[] }) => {
   );
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-            <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+            </div>
           </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div className="ml-4">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-            <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <StudentGrowthChart courses={courses} />
+        
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
+            My Assigned Courses
+          </h3>
+          <div className="space-y-4">
+            {courses.map((course) => (
+              <div 
+                key={course._id}
+                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                      {course.name}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {course.enrolledStudents?.length || 0} students
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                  Active
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-            <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
-          </div>
-        </div>
-      </div>
+const StudentGrowthChart = ({ courses }: { courses: Course[] }) => {
+  const pieChartData = {
+    labels: courses.map(course => course.name),
+    datasets: [{
+      data: courses.map(course => course.enrolledStudents?.length || 0),
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.8)',   // blue
+        'rgba(16, 185, 129, 0.8)',   // green
+        'rgba(249, 115, 22, 0.8)',   // orange
+        'rgba(139, 92, 246, 0.8)',   // purple
+        'rgba(236, 72, 153, 0.8)',   // pink
+        'rgba(245, 158, 11, 0.8)',   // amber
+      ],
+      borderColor: 'rgba(255, 255, 255, 0.8)',
+      borderWidth: 2
+    }]
+  };
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-            <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-          </div>
-          <div className="ml-4">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
-          </div>
-        </div>
+  const pieChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          padding: 20,
+          usePointStyle: true,
+          pointStyle: 'circle'
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const label = context.label || '';
+            const value = context.raw || 0;
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value} students (${percentage}%)`;
+          }
+        }
+      }
+    },
+    cutout: '35%',
+    animation: {
+      animateScale: true,
+      animateRotate: true
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
+        Students per Course
+      </h3>
+      <div className="h-[400px] flex items-center justify-center">
+        <Pie data={pieChartData} options={pieChartOptions} />
       </div>
     </div>
   );
@@ -739,11 +885,6 @@ const ManageLessons = ({ courses, fetchTeacherCourses, user }: {
                         Course: {lesson.courseName}
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-4 prose prose-sm dark:prose-invert max-w-none">
-                    <p className="text-gray-600 dark:text-gray-300">
-                      {lesson.content || 'No content available'}
-                    </p>
                   </div>
                 </div>
                 <button
@@ -861,15 +1002,90 @@ const ManageLessons = ({ courses, fetchTeacherCourses, user }: {
   );
 };
 
-const ExamsList = ({ courses }: { courses: Course[] }) => {
-  const allExams = courses.flatMap((course) => 
-    (course.exams || []).map((exam) => ({
-      ...exam,
-      courseName: course.name,
-      courseId: course._id,
-      uniqueKey: `${course._id}-${exam._id}`
-    }))
-  );
+const ManageExams = ({ courses, fetchTeacherCourses, user }: { 
+  courses: Course[],
+  fetchTeacherCourses: (teacherId: string, token: string) => Promise<void>,
+  user: any
+}) => {
+  const [editingExam, setEditingExam] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [expandedExam, setExpandedExam] = useState<string | null>(null);
+  const [examResults, setExamResults] = useState<{[key: string]: any[]}>({});
+
+  useEffect(() => {
+    if (expandedExam) {
+      fetchExamResults(expandedExam);
+    }
+  }, [expandedExam]);
+
+  const fetchExamResults = async (examId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/teacher/exams/${examId}/results`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch exam results');
+      const data = await response.json();
+      setExamResults(prev => ({
+        ...prev,
+        [examId]: data.results
+      }));
+    } catch (error) {
+      console.error('Error fetching exam results:', error);
+    }
+  };
+
+  const allExams = courses.flatMap((course) => {
+    return (course.exams || []).map((exam) => {
+      console.log('Processing exam:', exam); // Debug log
+      return {
+        ...exam,
+        courseName: course.name,
+        courseId: course._id,
+        enrolledStudents: course.enrolledStudents || [],
+        questions: exam.questions ? exam.questions.map(q => ({
+          question: q.question || '',
+          options: Array.isArray(q.options) ? q.options : ['', '', '', ''],
+          correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0
+        })) : []
+      };
+    });
+  });
+
+  const handleUpdateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/teacher/courses/${editingExam.courseId}/exams/${editingExam._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editingExam.title,
+          description: editingExam.description,
+          questions: editingExam.questions,
+          totalScore: editingExam.totalScore,
+          dueDate: editingExam.dueDate
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update exam');
+      }
+
+      await swalSuccess({ text: 'Exam updated successfully' });
+      setIsEditModalOpen(false);
+      fetchTeacherCourses(user._id, token!);
+    } catch (error: any) {
+      console.error('Error updating exam:', error);
+      swalError(error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -879,16 +1095,14 @@ const ExamsList = ({ courses }: { courses: Course[] }) => {
 
       <div className="grid gap-6">
         {allExams.map((exam) => (
-          <div
-            key={exam.uniqueKey}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
-          >
+          <div key={exam._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6">
+              {/* Exam Header */}
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="flex-shrink-0 p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
-                      <AcademicCapIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                      <ClipboardDocumentCheckIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -905,56 +1119,400 @@ const ExamsList = ({ courses }: { courses: Course[] }) => {
                     </p>
                   </div>
                 </div>
+                <button
+                  onClick={() => {
+                    const examWithQuestions = {
+                      ...exam,
+                      _id: exam._id,
+                      title: exam.title,
+                      description: exam.description,
+                      totalScore: exam.totalScore,
+                      questions: exam.questions ? exam.questions.map(q => ({
+                        question: q.question,
+                        options: q.options || ['', '', '', ''],
+                        correctAnswer: q.correctAnswer
+                      })) : [],
+                      dueDate: exam.dueDate ? new Date(exam.dueDate).toISOString().split('T')[0] : ''
+                    };
+                    console.log('Setting exam with questions:', examWithQuestions);
+                    setEditingExam(examWithQuestions);
+                    setIsEditModalOpen(true);
+                  }}
+                  className="ml-4 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                >
+                  <PencilIcon className="h-5 w-5" />
+                </button>
               </div>
 
-              {/* Student Results Section */}
-              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-                  Student Results
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Student Name
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Score
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Submission Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {exam.submissions?.map((submission: any) => (
-                        <tr key={submission._id}>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {submission.studentName}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {submission.score}/{exam.totalScore}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {new Date(submission.submittedAt).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                      {(!exam.submissions || exam.submissions.length === 0) && (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                            No submissions yet
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+              {/* Results Accordion */}
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <button
+                  onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
+                  className="flex items-center justify-between w-full"
+                >
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Student Results ({exam.enrolledStudents?.length || 0} students)
+                  </span>
+                  <ChevronDownIcon
+                    className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedExam === exam._id ? 'transform rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {expandedExam === exam._id && (
+                  <div className="mt-4 space-y-3">
+                    {exam.enrolledStudents && exam.enrolledStudents.length > 0 ? (
+                      exam.enrolledStudents.map((student) => {
+                        const submission = examResults[exam._id]?.find(
+                          (result) => result.studentId === student._id
+                        );
+                        
+                        return (
+                          <div
+                            key={student._id}
+                            className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                    {student.username?.charAt(0) || 'S'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {student.username}
+                                  </h4>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {submission ? (
+                                      `Submitted: ${new Date(submission.submittedAt).toLocaleDateString()}`
+                                    ) : (
+                                      'Not attempted yet'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {submission ? (
+                                  <>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                      Score: {submission.score} / {exam.totalScore}
+                                    </span>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      {Math.round((submission.score / exam.totalScore) * 100)}%
+                                    </p>
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        No students enrolled in this course
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Edit Exam Modal */}
+      {isEditModalOpen && editingExam && (
+        <EditExamModal
+          exam={editingExam}
+          onClose={() => setIsEditModalOpen(false)}
+          onSubmit={handleUpdateExam}
+          setEditingExam={setEditingExam}
+        />
+      )}
+    </div>
+  );
+};
+
+const ManageAssignments = ({ courses, fetchTeacherCourses, user }: { 
+  courses: Course[],
+  fetchTeacherCourses: (teacherId: string, token: string) => Promise<void>,
+  user: any
+}) => {
+  const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<{[key: string]: any[]}>({});
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const results = await Promise.allSettled(
+          courses.map(async course => {
+            const response = await fetch(`/api/courses/${course._id}/assignments`, {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch assignments for course ${course._id}`);
+            }
+            
+            return response.json();
+          })
+        );
+        
+        const successfulResults = results
+          .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+          .map(result => result.value);
+        
+        const allAssignments = successfulResults.flat().map(assignment => ({
+          ...assignment,
+          courseName: courses.find(c => c._id === assignment.courseId)?.name,
+          enrolledStudents: courses.find(c => c._id === assignment.courseId)?.enrolledStudents || []
+        }));
+        
+        console.log('Fetched assignments:', allAssignments); // Add this debug log
+        setAssignments(allAssignments);
+      } catch (error) {
+        console.error('Error fetching assignments:', error);
+      }
+    };
+
+    fetchAssignments();
+  }, [courses]);
+
+  useEffect(() => {
+    if (expandedAssignment) {
+      fetchAssignmentSubmissions(expandedAssignment);
+    }
+  }, [expandedAssignment]);
+
+  const fetchAssignmentSubmissions = async (assignmentId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const courseId = assignments.find(a => a._id === assignmentId)?.courseId;
+      
+      if (!courseId) throw new Error('Course ID not found for assignment');
+      
+      const response = await fetch(`/api/teacher/courses/${courseId}/assignments/${assignmentId}/submissions`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response text:', errorText);
+        throw new Error('Failed to fetch assignment submissions');
+      }
+      
+      const data = await response.json();
+      setAssignmentSubmissions(prev => ({
+        ...prev,
+        [assignmentId]: data.submissions || []
+      }));
+    } catch (error) {
+      console.error('Error fetching assignment submissions:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+        Manage Assignments
+      </h2>
+
+      <div className="grid gap-6">
+        {assignments.map((assignment) => (
+          <div key={assignment._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="p-6">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                        {assignment.title}
+                      </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Course: {assignment.courseName}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <button
+                  onClick={() => setExpandedAssignment(expandedAssignment === assignment._id ? null : assignment._id)}
+                  className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400"
+                >
+                  <span>View Submissions ({assignment.enrolledStudents?.length || 0})</span>
+                  <ChevronDownIcon
+                    className={`w-4 h-4 transition-transform ${
+                      expandedAssignment === assignment._id ? 'transform rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {expandedAssignment === assignment._id && (
+                  <div className="mt-3 space-y-2">
+                    {assignment.enrolledStudents?.map((student: { _id: string; username: string }) => {
+                      const submission = assignmentSubmissions[assignment._id]?.find(
+                        (sub) => sub.studentId === student._id
+                      );
+                      
+                      return (
+                        <div
+                          key={student._id}
+                          className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                                {student.username?.charAt(0) || 'S'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {student.username}
+                              </span>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {submission ? (
+                                  `Submitted: ${new Date(submission.submittedAt).toLocaleDateString()}`
+                                ) : (
+                                  'Not submitted'
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          {submission ? (
+                            <a
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedSubmission(submission);
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer"
+                            >
+                              View Submission
+                            </a>
+                          ) : (
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selectedSubmission && (
+        <SubmissionViewModal
+          submission={selectedSubmission}
+          onClose={() => setSelectedSubmission(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+const ManageStudents = ({ courses }: { courses: Course[] }) => {
+  // Get all unique students across all courses
+  const allStudents = useMemo(() => {
+    const studentsMap = new Map();
+    
+    courses.forEach(course => {
+      course.enrolledStudents?.forEach(student => {
+        if (!studentsMap.has(student._id)) {
+          studentsMap.set(student._id, {
+            ...student,
+            courses: [course.name]
+          });
+        } else {
+          studentsMap.get(student._id).courses.push(course.name);
+        }
+      });
+    });
+    
+    return Array.from(studentsMap.values());
+  }, [courses]);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+        Manage Students
+      </h2>
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Student
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Email
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Enrolled Courses
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+            {allStudents.map((student) => (
+              <tr key={student._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {student?.fullName?.charAt(0) || student?.username?.charAt(0) || 'S'}
+                      </span>
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {student?.fullName || student?.username}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {student.email}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-wrap gap-2">
+                    {student.courses.map((courseName: string, index: number) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                      >
+                        {courseName}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -972,36 +1530,11 @@ export default function TeacherDashboard() {
   const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
 
   const navigation = [
-    {
-      name: 'Dashboard',
-      icon: ChartPieIcon,
-      view: 'dashboard',
-    },
-    {
-      name: 'My Courses',
-      icon: BookOpenIcon,
-      view: 'courses',
-    },
-    {
-      name: 'Manage Lessons',
-      icon: BookmarkIcon,
-      view: 'lessons',
-    },
-    {
-      name: 'Manage Exams',
-      icon: AcademicCapIcon,
-      view: 'exams',
-    },
-    {
-      name: 'Manage Quizzes',
-      icon: ClipboardDocumentCheckIcon,
-      view: 'quizzes',
-    },
-    {
-      name: 'Students',
-      icon: UsersIcon,
-      view: 'students',
-    },
+    { name: 'Dashboard', view: 'dashboard', icon: ChartPieIcon },
+    { name: 'Lessons', view: 'lessons', icon: BookmarkIcon },
+    { name: 'Exams', view: 'exams', icon: ClipboardDocumentCheckIcon },
+    { name: 'Assignments', view: 'assignments', icon: BookmarkIcon },
+    { name: 'Students', view: 'students', icon: UsersIcon }
   ];
 
   useEffect(() => {
@@ -1093,91 +1626,26 @@ export default function TeacherDashboard() {
     }
   };
 
-  const DashboardStats = () => {
-    const totalStudents = courses.reduce(
-      (total, course) => total + (course.enrolledStudents?.length || 0),
-      0
-    );
-
-    return (
-      <div className="space-y-6">
-        <TeacherStats courses={courses} />
-
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          My Assigned Courses
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
-            <div
-              key={course._id}
-              className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
-                      {course.name}
-                    </h3>
-                  </div>
-                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                    Active
-                  </span>
-                </div>
-
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
-                  {course.description}
-                </p>
-
-                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      <UsersIcon className="h-4 w-4 inline mr-1" />
-                      {course.enrolledStudents?.length || 0} students
-                    </div>
-                    <button
-                      onClick={() => setSelectedCourseModal(course)}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-                    >
-                      View Details →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {selectedCourseModal && (
-          <CourseDetailsModal
-            course={selectedCourseModal}
-            isOpen={!!selectedCourseModal}
-            onClose={() => setSelectedCourseModal(null)}
-            onUpdate={() => fetchTeacherCourses(user._id, localStorage.getItem('token')!)}
-          />
-        )}
-      </div>
-    );
-  };
-
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <DashboardStats />;
+        return <TeacherStats courses={courses} />;
       case 'courses':
         return selectedCourse ? (
           <CourseDetailsModal course={selectedCourse} isOpen={isAddLessonModalOpen} onClose={() => setIsAddLessonModalOpen(false)} onUpdate={() => fetchTeacherCourses(user._id, localStorage.getItem('token')!)} />
         ) : (
-          <DashboardStats />
+          <TeacherStats courses={courses} />
         );
       case 'lessons':
         return <ManageLessons courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
       case 'exams':
-        return <ExamsList courses={courses} />;
+        return <ManageExams courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
+      case 'assignments':
+        return <ManageAssignments courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
+      case 'students':
+        return <ManageStudents courses={courses} />;
       default:
-        return <DashboardStats />;
+        return <TeacherStats courses={courses} />;
     }
   };
 

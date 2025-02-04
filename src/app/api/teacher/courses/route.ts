@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { verifyJWT } from '@/app/lib/jwt';
-import Course from '@/app/models/Course';
 import connectDB from '@/app/lib/db';
+import Course from '@/app/models/Course';
+import Lesson from '@/app/models/Lesson';
+import Exam from '@/app/models/Exam';
 
 export async function GET(request: Request) {
   try {
@@ -17,19 +19,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Find courses where teacherId matches the logged-in teacher's ID
     const courses = await Course.find({ teacherId: decoded.id })
+      .populate({
+        path: 'lessons',
+        model: Lesson,
+        select: 'title content dueDate studentProgress'
+      })
       .populate('enrolledStudents', 'username fullName email')
-      .select('title description enrolledStudents lessons')
+      .populate({
+        path: 'exams',
+        model: Exam,
+        select: 'title description dueDate totalScore'
+      })
+      .select('title description enrolledStudents lessons exams')
       .lean();
 
-    // Map the database fields to match the frontend interface
     const mappedCourses = courses.map(course => ({
       _id: course._id,
       name: course.title,
       description: course.description,
       enrolledStudents: course.enrolledStudents || [],
-      lessons: course.lessons || []
+      lessons: (course.lessons || []).map((lesson: any) => ({
+        ...lesson,
+        courseName: course.title
+      })),
+      exams: course.exams || []
     }));
 
     return NextResponse.json({ courses: mappedCourses });

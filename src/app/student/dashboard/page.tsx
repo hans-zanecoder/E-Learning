@@ -28,13 +28,18 @@ import mongoose from 'mongoose';
 import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
 import AssignmentModal from '@/app/components/AssignmentModal';
-import CourseEnrollModal from '../components/CourseEnrollModal';
 import CourseUnenrollModal from '../components/CourseUnenrollModal';
 
 interface CourseDetailsModalProps {
   course: Course;
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface ExamSubmission {
+  studentId: string;
+  score: number;
+  submittedAt: string;
 }
 
 const CourseDetailsModal = ({ course, isOpen, onClose }: CourseDetailsModalProps) => {
@@ -217,7 +222,7 @@ export default function StudentDashboard() {
   
     setUser(userData);
   
-    // Fetch data
+    // Initial fetch
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -237,9 +242,6 @@ export default function StudentDashboard() {
     };
   
     fetchData();
-  
-    const pollInterval = setInterval(fetchEnrolledCourses, 30000);
-    return () => clearInterval(pollInterval);
   }, []);
 
   useEffect(() => {
@@ -912,40 +914,43 @@ export default function StudentDashboard() {
           exams: course.exams.map(exam => ({
             ...exam,
             courseName: course.title,
-            courseId: course._id
+            courseId: course._id,
+            submissions: exam.submissions || []
           }))
         };
       }
       return acc;
     }, {} as Record<string, { courseName: string; exams: any[] }>);
 
+    const handleExamClick = (exam: any) => {
+      const userSubmission = exam.submissions?.find(
+        (sub: any) => sub.studentId === user._id
+      );
+      
+      setSelectedExam(exam);
+      setIsExamModalOpen(true);
+    };
+
     const handleExamSubmit = async (score: number) => {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
         const response = await fetch(`/api/student/exams/${selectedExam._id}/submit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ score }),
         });
 
         const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to submit exam');
-        }
+        if (!response.ok) throw new Error(data.error);
 
-        await swalSuccess({ text: 'Exam submitted successfully!' });
-        fetchEnrolledCourses();
+        await fetchEnrolledCourses();
+        return { score }; 
       } catch (error: any) {
         console.error('Error submitting exam:', error);
-        swalError(error);
+        throw error;
       }
     };
 
@@ -976,8 +981,11 @@ export default function StudentDashboard() {
                   Completed Exams
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {/* Add completed exams count logic here */}
-                  0
+                  {enrolledCourses.reduce((total, course) => {
+                    return total + (course.exams?.filter(exam => 
+                      exam.submissions?.some(sub => sub.studentId === user._id)
+                    ).length || 0);
+                  }, 0)}
                 </h3>
               </div>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
@@ -1029,7 +1037,7 @@ export default function StudentDashboard() {
 
           <div className="space-y-8">
             {Object.entries(examsByCourse).map(([courseId, { courseName, exams }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
@@ -1045,42 +1053,57 @@ export default function StudentDashboard() {
                 </div>
 
                 <div className="space-y-3">
-                  {exams.map((exam) => (
-                    <button
-                      key={exam._id}
-                      onClick={() => {
-                        setSelectedExam(exam);
-                        setIsExamModalOpen(true);
-                      }}
-                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
-                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
-                        focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
-                        relative overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center space-x-4 flex-1">
-                          <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                            <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  {exams.map((exam) => {
+                    const userSubmission = exam.submissions?.find(
+                      (sub) => sub.studentId === user._id
+                    );
+                    
+                    return (
+                      <button
+                        key={`assignment-${exam._id}`}
+                        onClick={() => handleExamClick(exam)}
+                        className={`w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                          hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
+                          focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
+                          relative overflow-hidden ${userSubmission ? 'cursor-default hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''}`}
+                      >
+                        <div className="flex items-center justify-between relative z-10">
+                          <div className="flex items-center space-x-4 flex-1">
+                            <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                              {userSubmission ? (
+                                <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              ) : (
+                                <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                                {exam.title}
+                              </h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {userSubmission ? (
+                                  <span className="text-green-600 dark:text-green-400">
+                                    Score: {userSubmission.score} / {exam.totalScore}
+                                  </span>
+                                ) : (
+                                  `Duration: ${exam.duration} minutes`
+                                )}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
-                              {exam.title}
-                            </h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Duration: {exam.duration} minutes
-                            </p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                              {userSubmission ? 'Completed' : 'Start Exam'}
+                            </span>
+                            {!userSubmission && (
+                              <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                            Start Exam
-                          </span>
-                          <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  ))}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -1092,6 +1115,11 @@ export default function StudentDashboard() {
             exam={selectedExam}
             onSubmit={handleExamSubmit}
             onClose={() => setIsExamModalOpen(false)}
+            existingSubmission={
+              selectedExam.submissions?.find(
+                (sub: any) => sub.studentId === user._id
+              )
+            }
           />
         )}
       </div>
@@ -1211,7 +1239,7 @@ export default function StudentDashboard() {
           
           <div className="space-y-8">
             {Object.entries(lessonsByCourse).map(([courseId, { courseName, lessons }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
+              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
@@ -1229,7 +1257,7 @@ export default function StudentDashboard() {
                 <div className="space-y-3">
                   {lessons.map((lesson) => (
                     <button
-                      key={lesson._id}
+                      key={`assignment-${lesson._id}`}
                       onClick={() => {
                         setSelectedLesson(lesson);
                         setIsLessonModalOpen(true);
@@ -1289,82 +1317,168 @@ export default function StudentDashboard() {
   };
 
   const AssignmentsView = () => {
-    // Group assignments by course
-    const assignmentsByCourse = enrolledCourses.reduce((acc, course) => {
-      if (course.assignments && course.assignments.length > 0) {
-        acc[course._id] = {
-          courseName: course.title,
-          assignments: course.assignments.map(assignment => ({
-            ...assignment,
-            courseName: course.title,
-            courseId: course._id
-          }))
-        };
+    const [assignments, setAssignments] = useState([]);
+    const [stats, setStats] = useState({
+      total: 0,
+      submitted: 0,
+      pending: 0
+    });
+
+    useEffect(() => {
+      const hasLoadedKey = 'assignmentsLoaded';
+      const hasLoaded = sessionStorage.getItem(hasLoadedKey);
+
+      const fetchAssignments = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const promises = enrolledCourses.map(course => 
+            fetch(`/api/courses/${course._id}/assignments`, {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }).then(res => res.json())
+          );
+          
+          const courseAssignments = await Promise.all(promises);
+          const allAssignments = courseAssignments.flat();
+          
+          // Calculate stats
+          const submitted = allAssignments.filter(a => 
+            a.submissions?.some(s => s.studentId === user._id)
+          ).length;
+          
+          setStats({
+            total: allAssignments.length,
+            submitted,
+            pending: allAssignments.length - submitted
+          });
+          
+          setAssignments(allAssignments);
+          sessionStorage.setItem(hasLoadedKey, 'true');
+        } catch (error) {
+          console.error('Error fetching assignments:', error);
+        }
+      };
+
+      if (!hasLoaded) {
+        fetchAssignments();
       }
-      return acc;
-    }, {} as Record<string, { courseName: string; assignments: any[] }>);
+
+      // Cleanup on component unmount
+      return () => {
+        sessionStorage.removeItem(hasLoadedKey);
+      };
+    }, []); // Empty dependency array
+
+    const handleAssignmentClick = (assignment: any) => {
+      if (!assignment || !assignment._id) {
+        console.error('Assignment missing _id:', assignment);
+        return;
+      }
+      setSelectedAssignment(assignment);
+      setIsAssignmentModalOpen(true);
+    };
 
     return (
       <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            Course Assignments
-          </h2>
-          
-          <div className="space-y-8">
-            {Object.entries(assignmentsByCourse).map(([courseId, { courseName, assignments }]) => (
-              <div key={courseId} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                      <BookOpenIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      {courseName}
-                    </h3>
-                  </div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {assignments.map((assignment) => (
-                    <button
-                      key={assignment._id}
-                      onClick={() => {
-                        setSelectedAssignment(assignment);
-                        setIsAssignmentModalOpen(true);
-                      }}
-                      className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
-                        hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex-shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                            <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          </div>
-                          <div>
-                            <h4 className="text-base font-medium text-gray-900 dark:text-white">
-                              {assignment.title}
-                            </h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Due: {new Date(assignment.dueDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                            {assignment.totalScore} points
-                          </span>
-                          <ArrowRightIcon className="w-5 h-5 text-gray-400" />
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Assignments
+                </p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {stats.total}
+                </h3>
               </div>
-            ))}
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                <ClipboardDocumentCheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Submitted
+                </p>
+                <h3 className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {stats.submitted}
+                </h3>
+              </div>
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+                <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Pending
+                </p>
+                <h3 className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {stats.pending}
+                </h3>
+              </div>
+              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Assignments List */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+            Your Assignments
+          </h2>
+          <div className="space-y-4">
+            {assignments.map((assignment) => {
+              const isSubmitted = assignment.submissions?.some(s => s.studentId === user._id);
+              return (
+                <button
+                  key={`assignment-${assignment._id}`}
+                  onClick={() => handleAssignmentClick(assignment)}
+                  className="w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                    hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className={`flex-shrink-0 p-2 rounded-lg ${
+                        isSubmitted 
+                          ? 'bg-green-100 dark:bg-green-900/30' 
+                          : 'bg-blue-100 dark:bg-blue-900/30'
+                      }`}>
+                        {isSubmitted ? (
+                          <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                          {assignment.title}
+                        </h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        {assignment.totalScore} points
+                      </span>
+                      <ArrowRightIcon className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

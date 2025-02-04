@@ -1,11 +1,33 @@
 import mongoose from 'mongoose';
-import { teacherSchema } from './Teacher';
+import { lessonSchema } from './Lesson';
 import { courseSchema } from './Course';
+import { teacherSchema } from './Teacher';
 import { studentSchema } from './Student';
+import examSchema from './Exam';
 import { enrollmentSchema } from './Enrollment';
+import adminSchema from './Admin';
 
-// Register all models
-export const Teacher = mongoose.models.Teacher || mongoose.model('Teacher', teacherSchema);
-export const Course = mongoose.models.Course || mongoose.model('Course', courseSchema);
-export const Student = mongoose.models.Student || mongoose.model('Student', studentSchema);
-export const Enrollment = mongoose.models.Enrollment || mongoose.model('Enrollment', enrollmentSchema);
+const registerModel = <T>(modelName: string, schema: mongoose.Schema | mongoose.Model<T>) => {
+  if (schema instanceof mongoose.Model) {
+    return schema as mongoose.Model<T>;
+  }
+  return mongoose.models[modelName] || mongoose.model<T>(modelName, schema as mongoose.Schema);
+};
+
+export const Lesson = registerModel('Lesson', lessonSchema);
+export const Course = registerModel('Course', courseSchema);
+export const Teacher = registerModel('Teacher', teacherSchema);
+export const Student = registerModel('Student', studentSchema);
+export const Exam = registerModel('Exam', examSchema);
+export const Enrollment = registerModel('Enrollment', enrollmentSchema);
+export const Admin = registerModel('Admin', adminSchema);
+
+export default {
+  Lesson,
+  Course,
+  Teacher,
+  Student,
+  Exam,
+  Enrollment,
+  Admin
+};

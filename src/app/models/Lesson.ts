@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
-const lessonSchema = new mongoose.Schema({
+export const lessonSchema = new mongoose.Schema({
   _id: {
     type: String,
     default: () => uuidv4(),
@@ -16,10 +16,13 @@ const lessonSchema = new mongoose.Schema({
   dueDate: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  _id: false,
+  strict: true
 });
 
-const Lesson = mongoose.models.Lesson || mongoose.model('Lesson', lessonSchema);
-export default Lesson;
+// Don't create the model here, export the schema instead
+export default mongoose.models.Lesson || mongoose.model('Lesson', lessonSchema);
 
 interface Lesson {
   _id: string;
