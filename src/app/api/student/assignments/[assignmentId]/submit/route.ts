@@ -9,6 +9,9 @@ export async function POST(
 ) {
   try {
     await connectDB();
+    
+    console.log('Received assignmentId:', params.assignmentId);
+
     const token = request.headers.get('Authorization')?.split(' ')[1];
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,6 +24,16 @@ export async function POST(
 
     const { fileUrl, submissionText, submissionType } = await request.json();
 
+    // First check if assignment exists
+    const existingAssignment = await Assignment.findById(params.assignmentId);
+    console.log('Found assignment:', existingAssignment);
+
+    if (!existingAssignment) {
+      console.error('Assignment not found with ID:', params.assignmentId);
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Create submission
     const assignment = await Assignment.findByIdAndUpdate(
       params.assignmentId,
       {
@@ -37,11 +50,10 @@ export async function POST(
       { new: true }
     );
 
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ message: 'Assignment submitted successfully', assignment });
+    return NextResponse.json({ 
+      message: 'Assignment submitted successfully', 
+      assignment 
+    });
   } catch (error: any) {
     console.error('Error submitting assignment:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

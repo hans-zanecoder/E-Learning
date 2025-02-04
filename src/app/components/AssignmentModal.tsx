@@ -19,7 +19,6 @@ export default function AssignmentModal({
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Convert file to base64 if it exists
       let fileUrl = '';
       if (submissionFile) {
         const base64 = await new Promise((resolve) => {
@@ -28,6 +27,22 @@ export default function AssignmentModal({
           reader.readAsDataURL(submissionFile);
         });
         fileUrl = base64 as string;
+      }
+
+      // Debug the assignment object
+      console.log('Assignment object:', {
+        id: assignment._id,
+        title: assignment.title,
+        fullObject: assignment
+      });
+
+      // Validate assignment object
+      if (!assignment || typeof assignment !== 'object') {
+        throw new Error('Invalid assignment object');
+      }
+
+      if (!assignment._id || typeof assignment._id !== 'string') {
+        throw new Error(`Invalid assignment ID: ${JSON.stringify(assignment._id)}`);
       }
 
       const token = localStorage.getItem('token');
@@ -52,6 +67,7 @@ export default function AssignmentModal({
       onClose();
     } catch (error: any) {
       console.error('Error submitting assignment:', error);
+      alert(`Submission failed: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
