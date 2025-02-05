@@ -290,9 +290,19 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    const confirmed = await swalConfirm({
+      title: 'Are you sure?',
+      text: 'You will be logged out of your account',
+      icon: 'warning',
+      confirmButtonText: 'Yes, logout',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (confirmed) {
+      localStorage.clear();
+      router.push('/auth/login');
+    }
   };
 
   const handleEnrollment = async () => {
