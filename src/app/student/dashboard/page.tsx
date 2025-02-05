@@ -29,6 +29,7 @@ import ExamAttempt from '@/app/components/ExamAttempt';
 import LessonModal from '@/app/components/LessonModal';
 import AssignmentModal from '@/app/components/AssignmentModal';
 import CourseUnenrollModal from '../components/CourseUnenrollModal';
+import Swal from 'sweetalert2';
 
 interface CourseDetailsModalProps {
   course: Course;
@@ -40,6 +41,29 @@ interface ExamSubmission {
   studentId: string;
   score: number;
   submittedAt: string;
+}
+
+interface Exam {
+  _id: string;
+  title: string;
+  date: string;
+  status: "upcoming" | "completed" | "missed";
+  submissions?: any[];
+}
+
+interface ExamResult {
+  _id: string;
+  examId: string;
+  studentId: string;
+  score: number;
+  submittedAt: string;
+}
+
+interface ExamWithDetails extends Exam {
+  courseName: string;
+  courseId: string;
+  result?: ExamResult;
+  status: 'completed' | 'missed' | 'upcoming';
 }
 
 const CourseDetailsModal = ({ course, isOpen, onClose }: CourseDetailsModalProps) => {
@@ -161,6 +185,9 @@ export default function StudentDashboard() {
   const [isCourseDetailsModalOpen, setIsCourseDetailsModalOpen] = useState(false);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [isUnenrollModalOpen, setIsUnenrollModalOpen] = useState(false);
+  const [examResults, setExamResults] = useState<ExamResult[]>([]);
+  const [completedExams, setCompletedExams] = useState<ExamWithDetails[]>([]);
+  const [pendingExams, setPendingExams] = useState<ExamWithDetails[]>([]);
 
   const navigation = [
     {
@@ -916,27 +943,117 @@ export default function StudentDashboard() {
   };
 
   const ExamsView = () => {
-    // Group exams by course
-    const examsByCourse = enrolledCourses.reduce((acc, course) => {
+    const [examResults, setExamResults] = useState<ExamResult[]>([]);
+
+    useEffect(() => {
+      fetchExamResults();
+    }, []);
+
+    const fetchExamResults = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/student/examresults', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) throw new Error('Failed to fetch exam results');
+        const data = await response.json();
+        setExamResults(data.results);
+      } catch (error) {
+        console.error('Error fetching exam results:', error);
+      }
+    };
+
+    const { completedExams, pendingExams } = enrolledCourses.reduce<{
+      completedExams: ExamWithDetails[];
+      pendingExams: ExamWithDetails[];
+    }>((acc, course) => {
       if (course.exams && course.exams.length > 0) {
-        acc[course._id] = {
-          courseName: course.title,
-          exams: course.exams.map(exam => ({
+        course.exams.forEach(exam => {
+          const examWithDetails = {
             ...exam,
             courseName: course.title,
             courseId: course._id,
-            submissions: exam.submissions || []
-          }))
-        };
+          };
+          
+          // Check if student has completed this exam
+          const result = examResults.find(
+            (result) => result.examId === exam._id
+          );
+
+          if (result && result.score !== undefined) {
+            acc.completedExams.push({
+              ...examWithDetails,
+              result,
+              status: 'completed'
+            });
+          } else {
+            const examDate = new Date(exam.dueDate);
+            const now = new Date();
+            
+            acc.pendingExams.push({
+              ...examWithDetails,
+              status: examDate < now ? 'missed' : 'upcoming'
+            });
+          }
+        });
       }
       return acc;
-    }, {} as Record<string, { courseName: string; exams: any[] }>);
+    }, { completedExams: [], pendingExams: [] });
+
+    // Sort completed exams by submission date (most recent first)
+    const sortedCompletedExams = completedExams.sort((a, b) => 
+      new Date(b.result.submittedAt).getTime() - new Date(a.result.submittedAt).getTime()
+    );
+
+    // Sort pending exams by due date (upcoming first)
+    const sortedPendingExams = pendingExams.sort((a, b) => 
+      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
 
     const handleExamClick = (exam: any) => {
-      const userSubmission = exam.submissions?.find(
-        (sub: any) => sub.studentId === user._id
-      );
+      const userSubmission = exam.result;
       
+      if (userSubmission) {
+        const percentage = Math.round((userSubmission.score / exam.totalScore) * 100);
+        Swal.fire({
+          title: 'Exam Already Completed',
+          html: `
+            <div class="space-y-4">
+              <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto">
+                <svg class="w-12 h-12 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Score</p>
+                    <p class="text-xl font-semibold text-gray-900 dark:text-white">${userSubmission.score} / ${exam.totalScore}</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Percentage</p>
+                    <p class="text-xl font-semibold ${
+                      percentage >= 70 ? 'text-green-600 dark:text-green-400' : 
+                      percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' : 
+                      'text-red-600 dark:text-red-400'
+                    }">${percentage}%</p>
+                  </div>
+                </div>
+              </div>
+              <div class="text-center">
+                <p class="text-sm text-gray-500 dark:text-gray-400">You cannot retake this exam</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Submitted on: ${new Date(userSubmission.submittedAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+          `,
+          confirmButtonText: 'Close',
+          confirmButtonColor: '#9333EA'
+        });
+        return;
+      }
+
       setSelectedExam(exam);
       setIsExamModalOpen(true);
     };
@@ -975,7 +1092,7 @@ export default function StudentDashboard() {
                   Total Exams
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {enrolledCourses.reduce((total, course) => total + (course.exams?.length || 0), 0)}
+                  {completedExams.length + pendingExams.length}
                 </h3>
               </div>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
@@ -991,11 +1108,7 @@ export default function StudentDashboard() {
                   Completed Exams
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {enrolledCourses.reduce((total, course) => {
-                    return total + (course.exams?.filter(exam => 
-                      exam.submissions?.some(sub => sub.studentId === user._id)
-                    ).length || 0);
-                  }, 0)}
+                  {completedExams.length}
                 </h3>
               </div>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
@@ -1011,112 +1124,114 @@ export default function StudentDashboard() {
                   Pending Exams
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {/* Add pending exams count logic here */}
-                  {enrolledCourses.reduce((total, course) => total + (course.exams?.length || 0), 0)}
+                  {pendingExams.length}
                 </h3>
               </div>
               <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
+                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Exams List - Redesigned */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 h-[540px] overflow-y-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Available Exams
-              </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                •
-              </span>
-              <div className="flex items-center space-x-2">
-                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                    {enrolledCourses[0]?.teachers?.[0]?.fullName?.charAt(0) || 'T'}
-                  </span>
-                </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {enrolledCourses[0]?.teachers?.[0]?.fullName || 'Teacher'}
-                </span>
-              </div>
+        {/* Exams Lists */}
+        <div className="space-y-6">
+          {/* Pending Exams */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Pending Exams
+            </h3>
+            <div className="space-y-4">
+              {sortedPendingExams.map((exam) => (
+                <button
+                  key={exam._id}
+                  onClick={() => handleExamClick(exam)}
+                  className="w-full text-left bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
+                    hover:bg-gray-100 dark:hover:bg-gray-700/50 h-[88px]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                        <ClockIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                          {exam.title}
+                        </h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {exam.courseName}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm text-yellow-600 dark:text-yellow-400">
+                      Take Exam
+                    </span>
+                  </div>
+                </button>
+              ))}
+              {pendingExams.length === 0 && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                  No pending exams
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="space-y-8">
-            {Object.entries(examsByCourse).map(([courseId, { courseName, exams }]) => (
-              <div key={`course-${courseId}`} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-8 last:pb-0">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-                      <AcademicCapIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      {courseName}
-                    </h3>
-                  </div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {exams.length} {exams.length === 1 ? 'exam' : 'exams'}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {exams.map((exam) => {
-                    const userSubmission = exam.submissions?.find(
-                      (sub) => sub.studentId === user._id
-                    );
-                    
-                    return (
-                      <button
-                        key={`assignment-${exam._id}`}
-                        onClick={() => handleExamClick(exam)}
-                        className={`w-full text-left group cursor-pointer bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 
-                          hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200
-                          focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400
-                          relative overflow-hidden ${userSubmission ? 'cursor-default hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''}`}
-                      >
-                        <div className="flex items-center justify-between relative z-10">
-                          <div className="flex items-center space-x-4 flex-1">
-                            <div className="flex-shrink-0 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                              {userSubmission ? (
-                                <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-                              ) : (
-                                <AcademicCapIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-base font-medium text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
-                                {exam.title}
-                              </h4>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {userSubmission ? (
-                                  <span className="text-green-600 dark:text-green-400">
-                                    Score: {userSubmission.score} / {exam.totalScore}
-                                  </span>
-                                ) : (
-                                  `Duration: ${exam.duration} minutes`
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                              {userSubmission ? 'Completed' : 'Start Exam'}
-                            </span>
-                            {!userSubmission && (
-                              <ArrowRightIcon className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-                            )}
-                          </div>
+          {/* Completed Exams */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Completed Exams
+            </h3>
+            <div className="space-y-4">
+              {sortedCompletedExams.map((exam) => {
+                const userSubmission = exam.result;
+                if (!userSubmission || typeof userSubmission.score === 'undefined') {
+                  return null;
+                }
+                
+                const percentage = Math.round((userSubmission.score / exam.totalScore) * 100);
+                
+                return (
+                  <div
+                    key={exam._id}
+                    className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                          <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                         </div>
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-gray-100 dark:to-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                        <div>
+                          <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                            {exam.title}
+                          </h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {exam.courseName}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          Score: {userSubmission.score}/{exam.totalScore}
+                        </span>
+                        <p className={`text-sm font-medium ${
+                          percentage >= 70 ? 'text-green-600 dark:text-green-400' : 
+                          percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' : 
+                          'text-red-600 dark:text-red-400'
+                        }`}>
+                          {percentage}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {completedExams.length === 0 && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                  No completed exams
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1124,12 +1239,10 @@ export default function StudentDashboard() {
           <ExamAttempt
             exam={selectedExam}
             onSubmit={handleExamSubmit}
-            onClose={() => setIsExamModalOpen(false)}
-            existingSubmission={
-              selectedExam.submissions?.find(
-                (sub: any) => sub.studentId === user._id
-              )
-            }
+            onClose={() => {
+              setIsExamModalOpen(false);
+              setSelectedExam(null);
+            }}
           />
         )}
       </div>
@@ -1218,7 +1331,7 @@ export default function StudentDashboard() {
                 </h3>
               </div>
               <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
-                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
+                <ClockIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
               </div>
             </div>
           </div>
