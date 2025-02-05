@@ -21,9 +21,7 @@ interface ExamAttemptProps {
 }
 
 export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProps) {
-  const [selectedAnswers, setSelectedAnswers] = useState<number[]>(
-    new Array(exam.questions.length).fill(-1)
-  );
+  const [answers, setAnswers] = useState<number[]>(new Array(exam?.questions?.length || 0).fill(-1));
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -51,39 +49,58 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
     return () => clearInterval(timer);
   }, [startTime]);
 
-  const handleAnswerSelect = (questionIndex: number, answerIndex: number) => {
-    if (!submitted) {
-      const newAnswers = [...selectedAnswers];
-      newAnswers[questionIndex] = answerIndex;
-      setSelectedAnswers(newAnswers);
+  useEffect(() => {
+    if (!exam?.questions || exam.questions.length === 0) {
+      Swal.fire({
+        title: 'No Questions Available',
+        text: 'This exam does not have any questions available.',
+        icon: 'info',
+        confirmButtonText: 'Close',
+        confirmButtonColor: '#9333EA',
+        customClass: {
+          popup: 'dark:bg-gray-800 dark:text-white rounded-2xl',
+          title: 'text-xl font-medium',
+          htmlContainer: 'dark:text-gray-300',
+          confirmButton: 'px-6 py-3 rounded-xl text-sm font-medium transition-colors'
+        }
+      }).then(() => {
+        onClose();
+      });
     }
-  };
+  }, [exam?.questions, onClose]);
 
   const calculateScore = () => {
-    let correctAnswers = 0;
-    exam.questions.forEach((question, index) => {
-      if (selectedAnswers[index] === question.correctAnswer) {
-        correctAnswers++;
+    if (!exam?.questions) return 0;
+    
+    let score = 0;
+    answers.forEach((answer, index) => {
+      if (answer === exam.questions[index]?.correctAnswer) {
+        score += exam.totalScore / exam.questions.length;
       }
     });
-    return Math.round((correctAnswers / exam.questions.length) * exam.totalScore);
+    return Math.round(score);
+  };
+
+  const handleAnswerSelect = (questionIndex: number, answerIndex: number) => {
+    const newAnswers = [...answers];
+    newAnswers[questionIndex] = answerIndex;
+    setAnswers(newAnswers);
   };
 
   const handleSubmit = async () => {
+    if (!exam?.questions) return;
+    
     const finalScore = calculateScore();
     await onSubmit(finalScore);
     
-    // Calculate final duration
     const endTime = new Date();
     const totalSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
     const durationMinutes = Math.floor(totalSeconds / 60);
     const durationSeconds = totalSeconds % 60;
     const finalDuration = formatDuration(durationMinutes, durationSeconds);
     
-    // Close the modal first
     onClose();
     
-    // Then show score with SweetAlert
     const percentage = Math.round((finalScore / exam.totalScore) * 100);
     await Swal.fire({
       title: 'Exam Completed!',
@@ -128,35 +145,27 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
     });
   };
 
-  const nextQuestion = () => {
-    if (currentQuestion < exam.questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    }
-  };
-
-  const previousQuestion = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
-    }
-  };
-
   const getAnswerClassName = (questionIndex: number, optionIndex: number) => {
     if (!submitted) {
-      return selectedAnswers[questionIndex] === optionIndex
+      return answers[questionIndex] === optionIndex
         ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500 dark:border-blue-400'
         : 'bg-white dark:bg-gray-800 border-2 border-transparent hover:border-gray-200 dark:hover:border-gray-600';
     }
 
-    if (optionIndex === exam.questions[questionIndex].correctAnswer) {
+    if (optionIndex === exam.questions[questionIndex]?.correctAnswer) {
       return 'bg-green-100 dark:bg-green-900/30 border-2 border-green-500';
     }
 
-    if (selectedAnswers[questionIndex] === optionIndex) {
+    if (answers[questionIndex] === optionIndex) {
       return 'bg-red-100 dark:bg-red-900/30 border-2 border-red-500';
     }
 
     return 'bg-white dark:bg-gray-800 border-2 border-transparent opacity-50';
   };
+
+  if (!exam?.questions || exam.questions.length === 0) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm">
@@ -225,11 +234,11 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 ${
-                            selectedAnswers[currentQuestion] === oIndex
+                            answers[currentQuestion] === oIndex
                               ? 'border-purple-500 dark:border-purple-400 bg-purple-100 dark:bg-purple-900/30'
                               : 'border-gray-300 dark:border-gray-600'
                           }`}>
-                            {selectedAnswers[currentQuestion] === oIndex && (
+                            {answers[currentQuestion] === oIndex && (
                               <div className="w-2.5 h-2.5 rounded-full bg-purple-500 dark:bg-purple-400" />
                             )}
                           </div>
@@ -242,7 +251,7 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
 
                 <div className="flex justify-between items-center">
                   <button
-                    onClick={previousQuestion}
+                    onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
                     disabled={currentQuestion === 0}
                     className="px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 disabled:opacity-50 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
                   >
@@ -251,14 +260,14 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
                   {currentQuestion === exam.questions.length - 1 ? (
                     <button
                       onClick={handleSubmit}
-                      disabled={selectedAnswers.includes(-1)}
+                      disabled={answers.includes(-1)}
                       className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Submit Exam
                     </button>
                   ) : (
                     <button
-                      onClick={nextQuestion}
+                      onClick={() => setCurrentQuestion(prev => Math.min(exam.questions.length - 1, prev + 1))}
                       className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
                     >
                       Next →
