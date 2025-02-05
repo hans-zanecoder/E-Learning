@@ -13,7 +13,7 @@ import {
   BookOpenIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline';
-import Swal from 'sweetalert2';
+import { swalConfirm, swalSuccess, swalError } from '@/app/utils/swalUtils';
 import CourseEditModal from '@/app/admin/components/CourseEditModal';
 
 // Add interface for user type
@@ -92,6 +92,7 @@ export default function AdminDashboard() {
 
     fetchCourses();
     fetchDashboardStats();
+    fetchUsers();
     setUser(userData);
   }, []);
 
@@ -131,11 +132,102 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setUsers(data.users);
+    } catch (error: any) {
+      swalError(error, { 
+        title: 'Error',
+        defaultMessage: error.message 
+      });
+    }
+  };
+
   if (!user) return null;
 
-  const handleLogout = () => {
-    localStorage.clear();
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    const confirmed = await swalConfirm({
+      title: 'Are you sure?',
+      text: 'You will be logged out of your account',
+      icon: 'warning',
+      confirmButtonText: 'Yes, logout',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (confirmed) {
+      localStorage.clear();
+      router.push('/auth/login');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    const confirmed = await swalConfirm({
+      title: 'Are you sure?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      confirmButtonText: 'Yes, delete user',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete user');
+        }
+
+        await swalSuccess({ text: 'User deleted successfully' });
+        fetchUsers();
+      } catch (error) {
+        swalError(error, { defaultMessage: 'Failed to delete user' });
+      }
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    const confirmed = await swalConfirm({
+      title: 'Are you sure?',
+      text: `Do you want to ${currentStatus ? 'deactivate' : 'activate'} this user?`,
+      icon: 'warning',
+      confirmButtonText: 'Yes, proceed',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (confirmed) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/admin/users/${userId}/toggle-status`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update user status');
+        }
+
+        await swalSuccess({ text: 'User status updated successfully' });
+        fetchUsers();
+      } catch (error) {
+        swalError(error, { defaultMessage: 'Failed to update user status' });
+      }
+    }
   };
 
   const DashboardStats = () => {
@@ -303,22 +395,6 @@ export default function AdminDashboard() {
       fetchUsers();
     }, []);
 
-    const fetchUsers = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/api/admin/users', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        setUsers(data.users);
-      } catch (error: any) {
-        console.error('Error fetching users:', error);
-      }
-    };
-
     const handleEdit = (user: User) => {
       setSelectedUser(user);
       setEditFormData({
@@ -353,30 +429,20 @@ export default function AdminDashboard() {
         );
         setIsEditModalOpen(false);
 
-        Swal.fire({
-          title: 'Success!',
-          text: 'User updated successfully',
-          icon: 'success',
-          timer: 2000,
-        });
-      } catch (error: any) {
-        Swal.fire('Error', error.message, 'error');
+        await swalSuccess({ text: 'User updated successfully' });
+      } catch (error) {
+        swalError(error, { defaultMessage: 'Failed to update user' });
       }
     };
 
     const handleSoftDelete = async (userId: string) => {
       try {
-        const result = await Swal.fire({
+        const confirmed = await swalConfirm({
           title: 'Are you sure?',
-          text: 'This user will be deactivated but can be restored later.',
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonColor: '#3085d6',
-          cancelButtonColor: '#d33',
-          confirmButtonText: 'Yes, deactivate',
+          text: 'This user will be deactivated but can be restored later.'
         });
 
-        if (result.isConfirmed) {
+        if (confirmed) {
           const token = localStorage.getItem('token');
           const response = await fetch(
             `/api/admin/users/${userId}/soft-delete`,
@@ -397,10 +463,16 @@ export default function AdminDashboard() {
             )
           );
 
-          Swal.fire('Deactivated!', 'User has been deactivated.', 'success');
+          await swalSuccess({ 
+            title: 'Deactivated!',
+            text: 'User has been deactivated.'
+          });
         }
       } catch (error: any) {
-        Swal.fire('Error', error.message, 'error');
+        swalError(error, { 
+          title: 'Error',
+          defaultMessage: error.message 
+        });
       }
     };
 

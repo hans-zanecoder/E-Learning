@@ -2,7 +2,8 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { useState, useEffect, Fragment } from 'react';
-import Swal from 'sweetalert2';
+import { swalSuccess, swalError } from '@/app/utils/swalUtils';
+import { useRouter } from 'next/navigation';
 
 interface CourseEditModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export default function CourseEditModal({
     teacherId: '',
   });
   const [teachers, setTeachers] = useState<Array<{ _id: string; fullName: string }>>([]);
+  const router = useRouter();
 
   useEffect(() => {
     if (course) {
@@ -54,47 +56,66 @@ export default function CourseEditModal({
       setTeachers(data.teachers);
     } catch (error: any) {
       console.error('Error fetching teachers:', error);
-      Swal.fire('Error', error.message, 'error');
+      swalError(error, { defaultMessage: 'Failed to fetch teachers' });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      console.log('Submitting update for course:', {
+        courseId: course._id,
+        course: course,
+        formData: formData
+      });
+
       const response = await fetch(`/api/admin/courses/${course._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ...formData,
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
           startDate: new Date(formData.startDate).toISOString(),
           endDate: new Date(formData.endDate).toISOString(),
+          teacherId: formData.teacherId
         }),
       });
 
-      const responseText = await response.text();
-      let data;
-      
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Raw response:', responseText);
-        throw new Error(`Server error: ${responseText.substring(0, 200)}...`);
-      }
-
       if (!response.ok) {
-        throw new Error(data?.error || `Server error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Error response text:', errorText);
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error;
+        } catch (e) {
+          errorMessage = `Failed to update course (${response.status})`;
+        }
+        throw new Error(errorMessage);
       }
 
-      await Swal.fire('Success', 'Course updated successfully', 'success');
+      const data = await response.json();
+      if (!data) {
+        throw new Error('Invalid response from server');
+      }
+
+      await swalSuccess({ text: 'Course updated successfully' });
       onUpdate();
       closeModal();
+      router.refresh();
     } catch (error: any) {
       console.error('Update error details:', error);
-      Swal.fire('Error', error.message || 'Failed to update course', 'error');
+      swalError(error, { defaultMessage: 'Failed to update course' });
     }
   };
 
