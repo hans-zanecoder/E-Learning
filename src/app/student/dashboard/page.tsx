@@ -1679,75 +1679,73 @@ export default function StudentDashboard() {
         </h2>
 
         <div className="grid gap-6">
-          {courseGrades.length > 0 && courseGrades.some(course => course.grades.length > 0) ? (
-            courseGrades.map(course => (
-              course.grades.length > 0 && (
-                <div 
-                  key={course.courseId}
-                  className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      {course.courseName}
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        Course Average:
-                      </span>
-                      <span className={`text-sm font-medium ${
-                        course.averagePercentage >= 70 ? 'text-green-600 dark:text-green-400' :
-                        course.averagePercentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
-                        'text-red-600 dark:text-red-400'
-                      }`}>
-                        {course.averagePercentage.toFixed(1)}%
-                      </span>
-                    </div>
+          {courseGrades.map(course => (
+            <div 
+              key={course.courseId}
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  {course.courseName}
+                </h3>
+                {course.grades.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      Course Average:
+                    </span>
+                    <span className={`text-sm font-medium ${
+                      course.averagePercentage >= 70 ? 'text-green-600 dark:text-green-400' :
+                      course.averagePercentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                      'text-red-600 dark:text-red-400'
+                    }`}>
+                      {course.averagePercentage.toFixed(1)}%
+                    </span>
                   </div>
-
-                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {course.grades.map((grade, index) => (
-                      <div 
-                        key={`${grade.title}-${index}`}
-                        className="py-3 flex items-center justify-between"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {grade.title}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {grade.type} • Submitted {new Date(grade.submittedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {grade.score}/{grade.totalScore}
-                          </p>
-                          <p className={`text-xs font-medium ${
-                            grade.percentage >= 70 ? 'text-green-600 dark:text-green-400' :
-                            grade.percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
-                            'text-red-600 dark:text-red-400'
-                          }`}>
-                            {grade.percentage.toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            ))
-          ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AcademicCapIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
-                </div>
-                <p className="text-gray-500 dark:text-gray-400">
-                  No Exams/Grades to Calculate
-                </p>
+                )}
               </div>
+
+              {course.grades.length > 0 ? (
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {course.grades.map((grade, index) => (
+                    <div 
+                      key={`${grade.title}-${index}`}
+                      className="py-3 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {grade.title}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {grade.type} • Submitted {new Date(grade.submittedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {grade.score}/{grade.totalScore}
+                        </p>
+                        <p className={`text-xs font-medium ${
+                          grade.percentage >= 70 ? 'text-green-600 dark:text-green-400' :
+                          grade.percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-red-600 dark:text-red-400'
+                        }`}>
+                          {grade.percentage.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AcademicCapIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    No exams/grades yet
+                  </p>
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       </div>
     );
