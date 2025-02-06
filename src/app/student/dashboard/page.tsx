@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -224,6 +224,11 @@ export default function StudentDashboard() {
       name: 'Assignments',
       icon: ClipboardDocumentCheckIcon,
       view: 'assignments',
+    },
+    {
+      name: 'Grades',
+      view: 'grades',
+      icon: AcademicCapIcon
     },
     {
       name: 'Profile',
@@ -965,52 +970,47 @@ export default function StudentDashboard() {
       }
     };
 
-    const { completedExams, pendingExams } = enrolledCourses.reduce<{
-      completedExams: ExamWithDetails[];
-      pendingExams: ExamWithDetails[];
-    }>((acc, course) => {
-      if (course.exams && course.exams.length > 0) {
-        course.exams.forEach(exam => {
-          const examWithDetails = {
-            ...exam,
-            courseName: course.title,
-            courseId: course._id,
-          };
-          
-          // Check if student has completed this exam
-          const result = examResults.find(
-            (result) => result.examId === exam._id
-          );
-
-          if (result && result.score !== undefined) {
-            acc.completedExams.push({
-              ...examWithDetails,
-              result,
-              status: 'completed'
-            });
-          } else {
-            const examDate = new Date(exam.dueDate);
-            const now = new Date();
+    const { completedExams, pendingExams } = useMemo(() => {
+      return enrolledCourses.reduce<{
+        completedExams: ExamWithDetails[];
+        pendingExams: ExamWithDetails[];
+      }>((acc, course) => {
+        if (course.exams && course.exams.length > 0) {
+          course.exams.forEach(exam => {
+            const examWithDetails = {
+              ...exam,
+              courseName: course.title,
+              courseId: course._id,
+            };
             
-            acc.pendingExams.push({
-              ...examWithDetails,
-              status: examDate < now ? 'missed' : 'upcoming'
-            });
-          }
-        });
-      }
-      return acc;
-    }, { completedExams: [], pendingExams: [] });
+            // Find the exam result for this exam
+            const result = examResults.find(
+              (result) => result.examId === exam._id
+            );
 
-    // Sort completed exams by submission date (most recent first)
-    const sortedCompletedExams = completedExams.sort((a, b) => 
-      new Date(b.result.submittedAt).getTime() - new Date(a.result.submittedAt).getTime()
-    );
-
-    // Sort pending exams by due date (upcoming first)
-    const sortedPendingExams = pendingExams.sort((a, b) => 
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-    );
+            if (result) {
+              acc.completedExams.push({
+                ...examWithDetails,
+                result: {
+                  ...result,
+                  score: result.score,
+                  submittedAt: result.submittedAt
+                },
+                status: 'completed'
+              });
+            } else {
+              const examDate = new Date(exam.dueDate);
+              const now = new Date();
+              acc.pendingExams.push({
+                ...examWithDetails,
+                status: examDate < now ? 'missed' : 'upcoming'
+              });
+            }
+          });
+        }
+        return acc;
+      }, { completedExams: [], pendingExams: [] });
+    }, [enrolledCourses, examResults]);
 
     const handleExamClick = (exam: any) => {
       const userSubmission = exam.result;
@@ -1142,7 +1142,7 @@ export default function StudentDashboard() {
               Pending Exams
             </h3>
             <div className="space-y-4">
-              {sortedPendingExams.map((exam) => (
+              {pendingExams.map((exam) => (
                 <button
                   key={exam._id}
                   onClick={() => handleExamClick(exam)}
@@ -1183,7 +1183,7 @@ export default function StudentDashboard() {
               Completed Exams
             </h3>
             <div className="space-y-4">
-              {sortedCompletedExams.map((exam) => {
+              {completedExams.map((exam) => {
                 const userSubmission = exam.result;
                 if (!userSubmission || typeof userSubmission.score === 'undefined') {
                   return null;
@@ -1608,6 +1608,151 @@ export default function StudentDashboard() {
     );
   };
 
+  const GradesView = () => {
+    const [examResults, setExamResults] = useState<ExamResult[]>([]);
+
+    useEffect(() => {
+      fetchExamResults();
+    }, []);
+
+    const fetchExamResults = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/student/examresults', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) throw new Error('Failed to fetch exam results');
+        const data = await response.json();
+        setExamResults(data.results);
+      } catch (error) {
+        console.error('Error fetching exam results:', error);
+      }
+    };
+
+    const courseGrades = useMemo(() => {
+      return enrolledCourses.map(course => {
+        // Calculate exam grades
+        const examGrades = course.exams?.map(exam => {
+          const result = examResults.find(r => r.examId === exam._id);
+          return result ? {
+            type: 'Exam',
+            title: exam.title,
+            score: result.score,
+            totalScore: exam.totalScore,
+            percentage: (result.score / exam.totalScore) * 100,
+            submittedAt: result.submittedAt
+          } : null;
+        }).filter(Boolean) || [];
+
+        // Calculate assignment grades
+        const assignmentGrades = course.assignments?.map(assignment => {
+          const submission = assignment.submissions?.find(s => s.studentId === user._id);
+          return submission ? {
+            type: 'Assignment',
+            title: assignment.title,
+            score: submission.score,
+            totalScore: assignment.totalScore,
+            percentage: (submission.score / assignment.totalScore) * 100,
+            submittedAt: submission.submittedAt
+          } : null;
+        }).filter(Boolean) || [];
+
+        const allGrades = [...examGrades, ...assignmentGrades];
+        const totalPercentage = allGrades.reduce((sum, grade) => sum + grade.percentage, 0);
+        const averagePercentage = allGrades.length > 0 ? totalPercentage / allGrades.length : 0;
+
+        return {
+          courseId: course._id,
+          courseName: course.title,
+          grades: allGrades,
+          averagePercentage
+        };
+      });
+    }, [enrolledCourses, examResults, user._id]);
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Your Grades
+        </h2>
+
+        <div className="grid gap-6">
+          {courseGrades.length > 0 && courseGrades.some(course => course.grades.length > 0) ? (
+            courseGrades.map(course => (
+              course.grades.length > 0 && (
+                <div 
+                  key={course.courseId}
+                  className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {course.courseName}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Course Average:
+                      </span>
+                      <span className={`text-sm font-medium ${
+                        course.averagePercentage >= 70 ? 'text-green-600 dark:text-green-400' :
+                        course.averagePercentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                        'text-red-600 dark:text-red-400'
+                      }`}>
+                        {course.averagePercentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {course.grades.map((grade, index) => (
+                      <div 
+                        key={`${grade.title}-${index}`}
+                        className="py-3 flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {grade.title}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {grade.type} • Submitted {new Date(grade.submittedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {grade.score}/{grade.totalScore}
+                          </p>
+                          <p className={`text-xs font-medium ${
+                            grade.percentage >= 70 ? 'text-green-600 dark:text-green-400' :
+                            grade.percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {grade.percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            ))
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AcademicCapIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <p className="text-gray-500 dark:text-gray-400">
+                  No Exams/Grades to Calculate
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -1624,6 +1769,8 @@ export default function StudentDashboard() {
         return <AvailableCoursesView />;
       case 'assignments':
         return <AssignmentsView />;
+      case 'grades':
+        return <GradesView />;
       default:
         return <DashboardStats />;
     }

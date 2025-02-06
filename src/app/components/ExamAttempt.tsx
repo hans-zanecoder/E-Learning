@@ -99,27 +99,28 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
     const durationSeconds = totalSeconds % 60;
     const finalDuration = formatDuration(durationMinutes, durationSeconds);
     
+    const percentage = Math.round((finalScore / exam.totalScore) * 100);
+    
     onClose();
     
-    const percentage = Math.round((finalScore / exam.totalScore) * 100);
     await Swal.fire({
       title: 'Exam Completed!',
       html: `
         <div class="space-y-4">
-          <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto">
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto">
             <svg class="w-12 h-12 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-            <div class="grid grid-cols-2 gap-3">
-              <div class="text-center">
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Score</p>
-                <p class="text-xl font-semibold text-gray-900 dark:text-white">${finalScore} / ${exam.totalScore}</p>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Score</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-white">${finalScore} / ${exam.totalScore}</p>
               </div>
-              <div class="text-center">
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Percentage</p>
-                <p class="text-xl font-semibold ${
+              <div className="text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Percentage</p>
+                <p className="text-xl font-semibold ${
                   percentage >= 70 ? 'text-green-600 dark:text-green-400' : 
                   percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' : 
                   'text-red-600 dark:text-red-400'
@@ -127,8 +128,8 @@ export default function ExamAttempt({ exam, onSubmit, onClose }: ExamAttemptProp
               </div>
             </div>
           </div>
-          <div class="text-center">
-            <p class="text-sm text-gray-500 dark:text-gray-400">${finalDuration}</p>
+          <div className="text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">${finalDuration}</p>
           </div>
         </div>
       `,
