@@ -250,7 +250,7 @@ export default function AdminRegister() {
               </div>
 
               <div className="col-span-2">
-                <label className="block mb-2 text-sm text-gray-600 dark:text-gray-200">
+                <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                   Assigned Courses
                 </label>
                 <select
@@ -263,18 +263,24 @@ export default function AdminRegister() {
                     );
                     setFormData({ ...formData, courses: selectedCourses });
                   }}
-                  className="block w-full px-5 py-3 mt-2 text-gray-700 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700 focus:border-blue-400 dark:focus:border-blue-400 focus:ring-blue-400 focus:outline-none focus:ring focus:ring-opacity-40"
+                  className="block w-full px-4 py-3 mt-1 text-base text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:focus:ring-purple-500 dark:focus:border-purple-500 transition-colors duration-200"
                   required
                 >
                   {courses.map((course) => (
-                    <option key={course._id} value={course._id}>
+                    <option 
+                      key={course._id} 
+                      value={course._id}
+                      className="py-2 px-3 hover:bg-purple-50 dark:hover:bg-gray-700"
+                    >
                       {course.title}
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Hold Ctrl (Windows) or Command (Mac) to select multiple
-                  courses
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Hold Ctrl (Windows) or Command (Mac) to select multiple courses
                 </p>
               </div>
 

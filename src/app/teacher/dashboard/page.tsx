@@ -632,8 +632,13 @@ const CourseDetailsModal = ({ course, isOpen, onClose, onUpdate }: CourseDetails
   );
 };
 
-const TeacherStats = ({ courses }: { courses: Course[] }) => {
+const TeacherStats = ({ courses, fetchTeacherCourses, user }: { 
+  courses: Course[],
+  fetchTeacherCourses: (teacherId: string, token: string) => Promise<void>,
+  user: any 
+}) => {
   const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const totalStudents = courses.reduce((acc, course) => 
     acc + (course.enrolledStudents?.length || 0), 0
@@ -648,92 +653,121 @@ const TeacherStats = ({ courses }: { courses: Course[] }) => {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+    <>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <BookOpenIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Courses</h3>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{courses.length}</p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <UsersIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</h3>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalStudents}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 h-12 w-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Exams</h3>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalExams}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 h-12 w-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-              <BookmarkIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-            </div>
-            <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Assignments</h3>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{totalAssignments}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <StudentGrowthChart courses={courses} />
-        
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
-            My Assigned Courses
-          </h3>
-          <div className="space-y-4">
-            {courses.map((course) => (
-              <div 
-                key={course._id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                    <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <StudentGrowthChart courses={courses} />
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">
+              My Assigned Courses
+            </h3>
+            <div className="space-y-4">
+              {courses.map((course) => (
+                <div 
+                  key={course._id}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {course.name}
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {course.enrolledStudents?.length || 0} students
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                      {course.name}
-                    </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {course.enrolledStudents?.length || 0} students
-                    </p>
+                  <div className="flex items-center space-x-3">
+                    <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Active
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedCourseModal(course);
+                        setIsModalOpen(true);
+                      }}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Manage Course
+                    </button>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                  Active
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {selectedCourseModal && (
+        <CourseDetailsModal
+          course={selectedCourseModal}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedCourseModal(null);
+          }}
+          onUpdate={() => {
+            if (user?._id) {
+              fetchTeacherCourses(user._id, localStorage.getItem('token')!);
+            }
+          }}
+        />
+      )}
+    </>
   );
 };
 
@@ -1525,7 +1559,7 @@ export default function TeacherDashboard() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [isAddLessonModalOpen, setIsAddLessonModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [students, setStudents] = useState([]);
   const [selectedCourseModal, setSelectedCourseModal] = useState<Course | null>(null);
 
@@ -1588,9 +1622,19 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    const confirmed = await swalConfirm({
+      title: 'Are you sure?',
+      text: 'You will be logged out of your account',
+      icon: 'warning',
+      confirmButtonText: 'Yes, logout',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (confirmed) {
+      localStorage.clear();
+      router.push('/auth/login');
+    }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
@@ -1629,12 +1673,19 @@ export default function TeacherDashboard() {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <TeacherStats courses={courses} />;
+        return <TeacherStats courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
       case 'courses':
         return selectedCourse ? (
-          <CourseDetailsModal course={selectedCourse} isOpen={isAddLessonModalOpen} onClose={() => setIsAddLessonModalOpen(false)} onUpdate={() => fetchTeacherCourses(user._id, localStorage.getItem('token')!)} />
+          <CourseDetailsModal course={selectedCourse} isOpen={isModalOpen} onClose={() => {
+            setIsModalOpen(false);
+            setSelectedCourse(null);
+          }} onUpdate={() => {
+            if (user?._id) {
+              fetchTeacherCourses(user._id, localStorage.getItem('token')!);
+            }
+          }} />
         ) : (
-          <TeacherStats courses={courses} />
+          <TeacherStats courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />
         );
       case 'lessons':
         return <ManageLessons courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
@@ -1645,7 +1696,7 @@ export default function TeacherDashboard() {
       case 'students':
         return <ManageStudents courses={courses} />;
       default:
-        return <TeacherStats courses={courses} />;
+        return <TeacherStats courses={courses} fetchTeacherCourses={fetchTeacherCourses} user={user} />;
     }
   };
 
@@ -1741,6 +1792,22 @@ export default function TeacherDashboard() {
           {renderContent()}
         </div>
       </div>
+
+      {selectedCourse && isModalOpen && (
+        <CourseDetailsModal
+          course={selectedCourse}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedCourse(null);
+          }}
+          onUpdate={() => {
+            if (user?._id) {
+              fetchTeacherCourses(user._id, localStorage.getItem('token')!);
+            }
+          }}
+        />
+      )}
     </>
   );
 }
